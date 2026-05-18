@@ -36,7 +36,7 @@ public class AuthService {
     private final SchemaProvisioningService provisioningService;
     private final RoleRepository            roleRepository;
     private final UserRoleRepository        userRoleRepository;
-    private final InviteRepository          inviteRepository;   // ← e shtova
+    private final InviteRepository          inviteRepository;
 
     @Transactional
     public AuthResponse register(RegisterRequest req,
@@ -45,8 +45,6 @@ public class AuthService {
         if (userRepository.existsByEmail(req.email())) {
             throw new ConflictException("Email ekziston");
         }
-
-        // ── Verifiko + shëno invite token si used (brenda transaksionit) ──────
         if (req.inviteToken() != null && !req.inviteToken().isBlank()) {
             InviteToken invite = inviteRepository.findByToken(req.inviteToken())
                     .orElseThrow(() -> new UnauthorizedException("Invite token i pavlefshëm"));
@@ -54,14 +52,10 @@ public class AuthService {
             if (!invite.isValid()) {
                 throw new UnauthorizedException("Invite token ka skaduar ose është përdorur");
             }
-
-            // Shëno si used — brenda së njëjtës @Transactional
-            // Nëse register dështon → rollback → token mbetet valid
             invite.setUsed(true);
             inviteRepository.save(invite);
         }
 
-        // ── Gjej ose krijo tenant ─────────────────────────────────────────────
         TenantCompany tenant = tenantRepository.findBySlug(req.tenantSlug())
                 .orElseGet(() -> {
                     TenantCompany t = new TenantCompany();
@@ -75,8 +69,6 @@ public class AuthService {
         if (!tenant.getIsActive()) {
             throw new UnauthorizedException("Tenant i çaktivizuar");
         }
-
-        // ── Krijo userin ──────────────────────────────────────────────────────
         User user = new User();
         user.setEmail(req.email());
         user.setPassword(passwordEncoder.encode(req.password()));

@@ -33,7 +33,6 @@ public class PaymentService {
     private final UserRepository          userRepo;
 
     private static final List<String> VALID_CURRENCIES = List.of("EUR","USD","GBP","CHF","ALL","MKD");
-    private static final List<String> VALID_PAY_TYPES  = List.of("RENT","DEPOSIT","LATE_FEE","MAINTENANCE");
 
     // ── Queries ───────────────────────────────────────────────────
     @Transactional(readOnly = true)

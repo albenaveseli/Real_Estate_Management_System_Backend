@@ -75,7 +75,7 @@ public class User {
     private List<RefreshToken> refreshTokens = new ArrayList<>();
 
     // ── Many-to-Many me RoleEntity ────────────────────────────
-    // IntelliJ diff do gjenerojë tabelën user_roles automatikisht
+    // IntelliJ diff gjeero user_roles automatikisht
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             schema             = "public",

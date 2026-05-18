@@ -22,17 +22,6 @@ public interface RentalListingRepository extends JpaRepository<RentalListing, Lo
     List<RentalListing> findByProperty_IdAndStatusAndDeletedAtIsNull(
             Long propertyId, String status);
 
-    // Listim sipas agjentit
-    Page<RentalListing> findByAgentIdAndDeletedAtIsNull(Long agentId, Pageable pageable);
-
-    // Filtrim sipas çmimit
-    Page<RentalListing> findByPriceBetweenAndStatusAndDeletedAtIsNull(
-            BigDecimal minPrice, BigDecimal maxPrice,
-            String status, Pageable pageable);
-
-    // Listim aktive
-    Page<RentalListing> findByStatusAndDeletedAtIsNull(String status, Pageable pageable);
-
     // Kontrollo overlap listing për të njëjtën pronë
     @Query("""
     SELECT COUNT(rl) > 0 FROM RentalListing rl

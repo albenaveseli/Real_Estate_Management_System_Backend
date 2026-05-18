@@ -31,10 +31,6 @@ public interface PropertyRepository
     List<Property> findByIsFeaturedTrueAndDeletedAtIsNull();
 
 
-    Page<Property> findByStatusAndDeletedAtIsNull(
-            PropertyStatus status, Pageable pageable);
-
-
     Page<Property> findByAgentIdAndDeletedAtIsNull(
             Long agentId, Pageable pageable);
 
@@ -58,44 +54,12 @@ public interface PropertyRepository
             Pageable pageable
     );
 
-
-    @Query("""
-        SELECT p FROM Property p
-        LEFT JOIN p.address a
-        WHERE (:minPrice IS NULL OR p.price >= :minPrice)
-          AND (:maxPrice IS NULL OR p.price <= :maxPrice)
-          AND (:bedrooms IS NULL OR p.bedrooms >= :bedrooms)
-          AND (:city IS NULL OR LOWER(a.city) LIKE LOWER(CONCAT('%', :city, '%')))
-          AND (:type IS NULL OR p.type = :type)
-          AND (:listingType IS NULL OR p.listingType = :listingType)
-          AND (:status IS NULL OR p.status = :status)
-          AND p.deletedAt IS NULL
-    """)
-    Page<Property> filterProperties(
-            @Param("minPrice")   BigDecimal minPrice,
-            @Param("maxPrice")   BigDecimal maxPrice,
-            @Param("bedrooms")   Integer bedrooms,
-            @Param("city")       String city,
-            @Param("type")       PropertyType type,
-            @Param("listingType") ListingType listingType,
-            @Param("status")     PropertyStatus status,
-            Pageable pageable
-    );
-
-
     @Query("""
         SELECT COUNT(p) FROM Property p
         WHERE p.status = :status
           AND p.deletedAt IS NULL
     """)
     Long countByStatus(@Param("status") PropertyStatus status);
-
-    @Query("""
-        SELECT COUNT(p) FROM Property p
-        WHERE p.agentId = :agentId
-          AND p.deletedAt IS NULL
-    """)
-    Long countByAgent(@Param("agentId") Long agentId);
 
 
     @Modifying

@@ -15,18 +15,13 @@ import java.util.Optional;
 @Repository
 public interface LeaseContractRepository extends JpaRepository<LeaseContract, Long> {
 
-    // Kontrata aktive e pronës
-    Optional<LeaseContract> findByProperty_IdAndStatus(Long propertyId, LeaseStatus status);
-
     // Kontratat e klientit
     Page<LeaseContract> findByClientIdOrderByCreatedAtDesc(Long clientId, Pageable pageable);
 
     // Kontratat e agjentit
     Page<LeaseContract> findByAgentIdOrderByCreatedAtDesc(Long agentId, Pageable pageable);
 
-    // Kontratat sipas statusit
-    Page<LeaseContract> findByStatusOrderByCreatedAtDesc(LeaseStatus status, Pageable pageable);
-    // Kontrollo overlap kontrate për të njëjtën pronë
+    // Kontrollo overlap kontrate per te njejten pronë
     @Query("""
     SELECT COUNT(lc) > 0 FROM LeaseContract lc
     WHERE lc.property.id = :propertyId
@@ -42,7 +37,7 @@ public interface LeaseContractRepository extends JpaRepository<LeaseContract, Lo
             @Param("startDate")  java.time.LocalDate startDate,
             @Param("endDate")    java.time.LocalDate endDate
     );
-    // Kontratat që skadojnë së shpejti (për notifikime)
+    // Kontratat qe skadojne se shpejti (per notifikime)
     @Query("""
         SELECT lc FROM LeaseContract lc
         WHERE lc.status = 'ACTIVE'
@@ -54,13 +49,6 @@ public interface LeaseContractRepository extends JpaRepository<LeaseContract, Lo
             @Param("deadline") LocalDate deadline
     );
 
-    // Kontratat aktive të klientit
-    @Query("""
-        SELECT lc FROM LeaseContract lc
-        WHERE lc.clientId = :clientId
-          AND lc.status = com.realestate.backend.entity.enums.LeaseStatus.ACTIVE
-    """)
-    List<LeaseContract> findActiveByClient(@Param("clientId") Long clientId);
 
     // Ndrysho statusin
     @Modifying
@@ -72,9 +60,9 @@ public interface LeaseContractRepository extends JpaRepository<LeaseContract, Lo
     """)
     void updateStatus(@Param("id") Long id, @Param("status") LeaseStatus status);
 
-    // Numëro kontratat aktive
+    // Numero kontratat aktive
     long countByStatus(LeaseStatus status);
 
-    // Kontrata sipas pronës
+    // Kontrata sipas prones
     List<LeaseContract> findByProperty_IdOrderByCreatedAtDesc(Long propertyId);
 }

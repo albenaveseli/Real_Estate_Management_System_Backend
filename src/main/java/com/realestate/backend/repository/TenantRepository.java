@@ -12,17 +12,8 @@ public interface TenantRepository extends JpaRepository<TenantCompany, Long> {
 
     Optional<TenantCompany> findBySlug(String slug);
 
-    Optional<TenantCompany> findByName(String name);
-
     boolean existsBySlug(String slug);
 
     boolean existsByName(String name);
 
-
-    @Query("""
-        SELECT t FROM TenantCompany t
-        WHERE t.slug = :slug
-          AND t.isActive = true
-    """)
-    Optional<TenantCompany> findActiveBySlug(@Param("slug") String slug);
 }

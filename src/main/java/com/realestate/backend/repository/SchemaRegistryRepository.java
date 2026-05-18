@@ -16,21 +16,4 @@ public interface SchemaRegistryRepository extends JpaRepository<TenantSchemaRegi
 
     Optional<TenantSchemaRegistry> findByTenant_IdAndIsProvisionedTrue(Long tenantId);
 
-    Optional<TenantSchemaRegistry> findBySchemaName(String schemaName);
-
-    boolean existsBySchemaName(String schemaName);
-
-
-    @Modifying
-    @Transactional
-    @Query("""
-        UPDATE TenantSchemaRegistry r
-        SET r.isProvisioned = true,
-            r.provisionedAt = :now
-        WHERE r.tenant.id = :tenantId
-    """)
-    void markAsProvisioned(
-            @Param("tenantId") Long tenantId,
-            @Param("now") LocalDateTime now
-    );
 }
