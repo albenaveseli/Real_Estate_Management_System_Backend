@@ -84,11 +84,11 @@ flowchart TD
     class JWT,TC warning
     class HB,S2 highlight
 ```
-# Request Lifecycle — Real Estate Management System
+## Request Lifecycle — Real Estate Management System
 
 ---
 
-## Frontend Overview
+### Frontend Overview
 
 ```mermaid
 flowchart LR
@@ -105,7 +105,7 @@ flowchart LR
 
 ---
 
-## Tomcat Acceptance
+### Tomcat Acceptance
 
 ```mermaid
 flowchart LR
@@ -123,7 +123,7 @@ flowchart LR
 
 ---
 
-## Servlet Filter Chain
+### Servlet Filter Chain
 
 ```mermaid
 flowchart LR
@@ -142,7 +142,7 @@ flowchart LR
 
 ---
 
-## Spring Security Filter Chain
+### Spring Security Filter Chain
 
 ```mermaid
 flowchart LR
@@ -163,7 +163,7 @@ flowchart LR
 
 ---
 
-## JwtAuthFilter Details
+### JwtAuthFilter Details
 
 ```mermaid
 flowchart LR
@@ -189,7 +189,7 @@ flowchart LR
 
 ---
 
-## PermissionAuthorizationFilter Details
+### PermissionAuthorizationFilter Details
 
 ```mermaid
 flowchart LR
@@ -215,7 +215,7 @@ flowchart LR
 
 ---
 
-##  DispatcherServlet Controller Service
+###  DispatcherServlet Controller Service
 
 ```mermaid
 flowchart LR
@@ -235,7 +235,7 @@ flowchart LR
 
 ---
 
-##  Multitenancy Schema Routing
+###  Multitenancy Schema Routing
 
 ```mermaid
 flowchart LR
@@ -256,7 +256,7 @@ flowchart LR
 
 ---
 
-## DB Queries in Tenant Schema
+### DB Queries in Tenant Schema
 
 ```mermaid
 flowchart LR
@@ -276,7 +276,7 @@ flowchart LR
 
 ---
 
-##  Response Returnes Back
+###  Response Returnes Back
 
 ```mermaid
 flowchart LR
@@ -299,7 +299,7 @@ flowchart LR
 
 ---
 
-##  JWT Structure and Validation
+###  JWT Structure and Validation
 
 ```mermaid
 flowchart LR
@@ -322,7 +322,7 @@ flowchart LR
 
 ---
 
-##  Access Token vs Refresh Token
+###  Access Token vs Refresh Token
 
 ```mermaid
 flowchart LR
@@ -352,7 +352,7 @@ flowchart LR
 
 ---
 
-##  TenantContext ThreadLocal Lifecycle
+###  TenantContext ThreadLocal Lifecycle
 
 ```mermaid
 flowchart LR
@@ -375,7 +375,7 @@ flowchart LR
 
 ---
 
-##  Multitenancy Isolation
+###  Multitenancy Isolation
 
 ```mermaid
 flowchart LR
@@ -574,6 +574,252 @@ IMPERSONATION ACTIVE — admin=7 acting as userId=15
 Impersonation is tenant-scoped — admins cannot impersonate users 
 from other tenants.
 
+## Impersonation Lifecycle 
+
+---
+
+###  Impersonation Overview
+
+```mermaid
+flowchart LR
+    A(["👤 Admin\nklikon Impersonate\nte Anita id=30"]) --> B["AuthProvider\nstartImpersonation\n30"]
+    B --> C["api.post\nadmin impersonate 30\nme admin token"]
+    C --> D["Backend\nvalidizon\ngeneron token"]
+    D --> E["Impersonation\nToken\nme impersonatedBy=29"]
+    E --> F["localStorage\nswap tokens"]
+    F --> G(["👤 Sistemi\nfunksionon\nsi Anita"])
+
+    style A fill:#2d4a22,color:#fff
+    style E fill:#4a3010,color:#fff
+    style F fill:#1a3a4a,color:#fff
+    style G fill:#4a1a1a,color:#fff
+```
+
+---
+
+### Frontend — Before Request
+
+```mermaid
+flowchart LR
+    A(["AdminAllAgents.jsx\nbuton Impersonate"]) --> B["AuthProvider\nstartImpersonation\nuserId=30"]
+    B --> C["api.post\nadmin impersonate 30"]
+    C --> D["axios interceptor\nAuthorization\nBearer adminToken\nuserId=29"]
+    D --> E(["POST\nadmin impersonate 30\nme admin JWT"])
+
+    style A fill:#2d4a22,color:#fff
+    style D fill:#4a3010,color:#fff
+    style E fill:#1a3a4a,color:#fff
+```
+
+---
+
+### Filter Chain with Admin Token
+
+```mermaid
+flowchart LR
+    A(["▶️ POST\nadmin impersonate 30"]) --> B["CorsFilter\nOrigin OK"]
+    B --> C["LoggingFilter\nstartTime\nPAUSE"]
+    C --> D["JwtAuthFilter\nparse adminToken\nuserId=29\nrole=ADMIN"]
+    D --> E["TenantContext.set\nuserId=29\ntenantId=8\nschema=tenant_X\nrole=ADMIN"]
+    E --> F["AuthorizationFilter\nauthenticated OK"]
+    F --> G["PermissionFilter\nJDBC permissions\nuser_id=29\nPOST impersonate OK"]
+    G --> H(["ImpersonationController\nimpersonate 30"])
+
+    style A fill:#1a3a4a,color:#fff
+    style D fill:#4a1a1a,color:#fff,stroke:#ff6b6b,stroke-width:2px
+    style E fill:#1a4a3a,color:#fff
+    style G fill:#2d1a4a,color:#fff
+    style H fill:#2d4a22,color:#fff
+```
+
+---
+
+### ImpersonationController — Validation
+
+```mermaid
+flowchart LR
+    A(["impersonate\nuserId=30"]) --> B{"TenantContext\ngetRole\n= ADMIN?"}
+    B -->|"Jo"| C(["403\nOnly ADMIN\ncan impersonate"])
+    B -->|"Po"| D["userRepository\nfindById 30\nSELECT public.users"]
+    D --> E{"target.getRole\n= ADMIN?"}
+    E -->|"Po"| F(["403\nCannot impersonate\nanother ADMIN"])
+    E -->|"Jo AGENT"| G{"target.getTenant\n= TenantContext\ngetTenantId?"}
+    G -->|"Jo cross-tenant"| H(["403\nCannot impersonate\ndifferent tenant"])
+    G -->|"Po 8 = 8"| I["schemaRegistry\nfindByTenant_Id 8\nschema=tenant_X"]
+    I --> J(["✅ Gjenero\nImpersonation Token"])
+
+    style A fill:#2d4a22,color:#fff
+    style C fill:#4a1a1a,color:#fff
+    style F fill:#4a1a1a,color:#fff
+    style H fill:#4a1a1a,color:#fff
+    style J fill:#1a3a4a,color:#fff
+```
+
+---
+
+### JWT Impersonation Token Generation
+
+```mermaid
+flowchart LR
+    A(["✅ Validimi\nKaloi"]) --> B["jwtUtil\ngenerateImpersonation\nToken"]
+    B --> C["Payload\nsub=30\nemail=anita\ntenantId=8\nschema=tenant_X\nrole=AGENT\nimpersonatedBy=29"]
+    C --> D["HMACSHA256\nheader.payload\nSECRET_KEY"]
+    D --> E["eyJhbGci...\nimpersonationToken"]
+    E --> F["log.warn\nIMPERSONATION STARTED\nadmin=29\nimpersonating=30"]
+    F --> G(["HTTP 200\ntoken\nemail\nrole\nfull_name"])
+
+    style A fill:#2d4a22,color:#fff
+    style C fill:#4a3010,color:#fff
+    style E fill:#1a3a4a,color:#fff
+    style F fill:#4a1a1a,color:#fff
+    style G fill:#2d4a22,color:#fff
+```
+
+---
+
+### Frontend — Token Swap
+
+```mermaid
+flowchart LR
+    A(["HTTP 200\ndata.token\ndata.email\ndata.role"]) --> B["localStorage.set\nadmin_token\n= access_token backup"]
+    B --> C["localStorage.set\nadmin_user_info\n= user_info backup"]
+    C --> D["localStorage.set\naccess_token\n= impersonationToken"]
+    D --> E["localStorage.set\nuser_info\nid=30 role=agent"]
+    E --> F["localStorage.set\nimpersonating\nemail=anita role=AGENT"]
+    F --> G["setUser\nimpersonatedUser"]
+    G --> H["setImpersonating\nemail role"]
+    H --> I(["window.location\nhref = /agent\nFULL RELOAD"])
+
+    style A fill:#1a3a4a,color:#fff
+    style B fill:#4a3010,color:#fff
+    style C fill:#4a3010,color:#fff
+    style D fill:#4a1a1a,color:#fff
+    style I fill:#2d4a22,color:#fff
+```
+
+---
+
+### During Impersonation — Every Request
+
+```mermaid
+flowchart LR
+    A(["Çdo request\nsi Anita"]) --> B["axios interceptor\nAuthorization\nBearer impersonationToken"]
+    B --> C["JwtAuthFilter\nparse token\nsub=30\nrole=AGENT\nimpersonatedBy=29"]
+    C --> D["log.warn\nIMPERSONATION ACTIVE\nadmin=29 acting\nas userId=30"]
+    D --> E["TenantContext.set\nuserId=30\nrole=AGENT\nschema=tenant_X"]
+    E --> F["PermissionFilter\nJDBC permissions\nuser_id=30\nAGENT permissions"]
+    F --> G(["Sistemi funksionon\nplotesisht si Anita\nAGENT permissions only"])
+
+    style A fill:#4a1a1a,color:#fff
+    style C fill:#4a3010,color:#fff
+    style D fill:#4a1a1a,color:#fff,stroke:#ff6b6b,stroke-width:2px
+    style E fill:#1a4a3a,color:#fff
+    style G fill:#2d4a22,color:#fff
+```
+
+---
+
+### Exit Impersonation — Frontend
+
+```mermaid
+flowchart LR
+    A(["👤 Admin klikon\nStop Impersonating"]) --> B["AuthProvider\nexitImpersonation"]
+    B --> C["api.post\nadmin impersonate exit\nme impersonationToken"]
+    C --> D["Backend log.info\nIMPERSONATION EXIT\nuserId=30\nreturn 204"]
+    D --> E["localStorage.set\naccess_token\n= admin_token restore"]
+    E --> F["localStorage.set\nuser_info\n= admin_user_info restore"]
+    F --> G["localStorage.remove\nadmin_token\nadmin_user_info\nimpersonating"]
+    G --> H["setUser\nadminUserInfo"]
+    H --> I["setImpersonating\nnull"]
+    I --> J(["window.location\nhref = /admin\nFULL RELOAD"])
+
+    style A fill:#2d4a22,color:#fff
+    style D fill:#1a3a4a,color:#fff
+    style E fill:#4a3010,color:#fff
+    style G fill:#4a1a1a,color:#fff
+    style J fill:#2d4a22,color:#fff
+```
+
+---
+
+### After Exit - Admin is back
+
+```mermaid
+flowchart LR
+    A(["Çdo request\npas exit"]) --> B["axios interceptor\nAuthorization\nBearer adminToken\noriginal"]
+    B --> C["JwtAuthFilter\nparse adminToken\nsub=29\nrole=ADMIN\nimpersonatedBy=null"]
+    C --> D{"impersonatedBy\nnull?"}
+    D -->|"Po"| E["TenantContext.set\nuserId=29\nrole=ADMIN\nschema=tenant_X"]
+    D -->|"Jo"| F["log.warn\nIMPERSONATION ACTIVE"]
+    E --> G["PermissionFilter\nADMIN permissions\nplots"]
+    G --> H(["✅ Admin\ni rikthyer\nplotesisht"])
+
+    style A fill:#2d4a22,color:#fff
+    style C fill:#4a3010,color:#fff
+    style E fill:#1a4a3a,color:#fff
+    style F fill:#4a1a1a,color:#fff
+    style H fill:#2d4a22,color:#fff
+```
+
+---
+
+###  localStorage State — Before and After
+
+```mermaid
+flowchart LR
+    subgraph "Para Impersonation"
+        A1["access_token\nadminToken userId=29"]
+        A2["refresh_token\nadminRefresh"]
+        A3["user_info\nid=29 role=admin"]
+    end
+
+    subgraph "Gjatë Impersonation"
+        B1["access_token\nimpersonToken userId=30"]
+        B2["refresh_token\nadminRefresh"]
+        B3["user_info\nid=30 role=agent"]
+        B4["admin_token\nadminToken BACKUP"]
+        B5["admin_user_info\nid=29 BACKUP"]
+        B6["impersonating\nemail=anita role=AGENT"]
+    end
+
+    subgraph "Pas Exit"
+        C1["access_token\nadminToken userId=29"]
+        C2["refresh_token\nadminRefresh"]
+        C3["user_info\nid=29 role=admin"]
+    end
+
+    A1 --> B1
+    B4 --> C1
+    B5 --> C3
+
+    style B4 fill:#4a3010,color:#fff
+    style B5 fill:#4a3010,color:#fff
+    style B6 fill:#4a1a1a,color:#fff
+    style B1 fill:#4a1a1a,color:#fff
+```
+
+---
+
+### Security 
+
+```mermaid
+flowchart LR
+    A(["POST\nimpersonate\nuserId"]) --> B{"Kush\nben kerkesen?"}
+    B -->|"Jo ADMIN"| C(["403\nOnly ADMIN\ncan impersonate"])
+    B -->|"ADMIN"| D{"Target\eshte ADMIN?"}
+    D -->|"Po"| E(["403\nCannot impersonate\nADMIN"])
+    D -->|"Jo"| F{"Same\nTenant?"}
+    F -->|"Jo"| G(["403\nCross-tenant\nbllokuar"])
+    F -->|"Po"| H["✅ Te gjitha\nkontrollet kaluan"]
+    H --> I["Gjenero token\nme impersonatedBy\nclaim per audit"]
+    I --> J(["Token i ri\njeton 1 ore\nautomatik skadon"])
+
+    style C fill:#4a1a1a,color:#fff
+    style E fill:#4a1a1a,color:#fff
+    style G fill:#4a1a1a,color:#fff
+    style H fill:#2d4a22,color:#fff
+    style J fill:#1a3a4a,color:#fff
+```
 ---
 
 ## BaseController — OOP/DRY Pattern
