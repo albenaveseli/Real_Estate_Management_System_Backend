@@ -85,7 +85,323 @@ flowchart TD
     class HB,S2 highlight
 ```
 ---
+## 🏗️ Request Lifecycle
 
+---
+
+###  Frontend → Backend (Overview)
+
+```mermaid
+flowchart LR
+    A([👤 User klikon\nDashboard]) --> B[AdminDashboard.jsx\nuseEffect fires]
+    B --> C[api.get\n'/api/admin/dashboard/stats']
+    C --> D[axios interceptor\nshton Authorization:\nBearer eyJhbGci...]
+    D --> E[XMLHttpRequest\nbrowser sends]
+    E --> F([🌐 HTTP Request\nGET /api/admin/dashboard/stats\nHost: localhost:8080])
+
+    style A fill:#2d4a22,color:#fff
+    style F fill:#1a3a4a,color:#fff
+    style D fill:#4a3a10,color:#fff
+```
+
+---
+
+###  Tomcat — Pranimi i Request
+
+```mermaid
+flowchart LR
+    A([🌐 TCP Packets\nlocalhost:8080]) --> B[Tomcat NIO Connector\nNioEndpoint]
+    B --> C[Http11Processor\nparse HTTP line\nparse headers]
+    C --> D[StandardContextValve\ngjen aplikacionin]
+    D --> E[ApplicationFilterChain\nkrijon me TË GJITHË filtrat]
+    E --> F([▶️ Filter Chain\nfillon ekzekutimin])
+
+    style A fill:#1a3a4a,color:#fff
+    style F fill:#2d4a22,color:#fff
+    style B fill:#3a2a10,color:#fff
+    style E fill:#3a2a10,color:#fff
+```
+
+---
+
+###  Servlet Filter Chain
+
+```mermaid
+flowchart LR
+    A([▶️ Start]) --> B[CharacterEncoding\nFilter\nUTF-8]
+    B --> C[CorsFilter\nOrigin check\nACCO headers]
+    C --> D[LoggingFilter\n@Component\nstartTime = now\n⏸ PAUSE]
+    D --> E[DelegatingFilter\nProxy\nSecurity Chain]
+    E --> F[PermissionAuthorization\nFilter\n@Component]
+    F --> G([DispatcherServlet])
+
+    style A fill:#1a3a4a,color:#fff
+    style D fill:#4a3010,color:#fff
+    style E fill:#2d1a4a,color:#fff
+    style G fill:#2d4a22,color:#fff
+```
+
+---
+
+###  Spring Security Filter Chain
+
+```mermaid
+flowchart LR
+    A([▶️ Enter\nSecurity]) --> B[DisableEncode\nUrlFilter]
+    B --> C[SecurityContext\nHolderFilter\nkrijon context]
+    C --> D[HeaderWriter\nFilter]
+    D --> E[LogoutFilter\nnuk është\n/logout kalon]
+    E --> F[JwtAuthFilter\n⭐ KRYESORI]
+    F --> G[Anonymous\nAuthFilter]
+    G --> H[Authorization\nFilter\nanyRequest\nauthenticated]
+    H --> I([▶️ kalon te\nPermission\nFilter])
+
+    style A fill:#2d1a4a,color:#fff
+    style F fill:#4a1a1a,color:#fff,stroke:#ff6b6b,stroke-width:2px
+    style H fill:#1a3a1a,color:#fff
+    style I fill:#2d4a22,color:#fff
+```
+
+---
+
+###  JwtAuthFilter — Detaje
+
+```mermaid
+flowchart LR
+    A([🔑 Token\nnë header]) --> B{Header\nekziston?}
+    B -->|Jo| C([kalon pa\nautentikimi])
+    B -->|Po| D[substring 7\nheq Bearer]
+    D --> E[JJWT\nparseClaimsJws\nverify HMAC-SHA256]
+    E --> F{Valid?}
+    F -->|Skaduar| G([401\nExpiredJwt])
+    F -->|Invalid| H([401\nJwtException])
+    F -->|OK| I[Ekstrakt Claims\nuserId=29\ntenantId=8\nschema=tenant_X\nrole=ADMIN]
+    I --> J[TenantContext.set\nThreadLocal populate]
+    J --> K[SecurityContext\nsetAuthentication\nROLE_ADMIN]
+    K --> L([✅ chain\n.doFilter])
+
+    style A fill:#4a3010,color:#fff
+    style F fill:#2d1a4a,color:#fff
+    style G fill:#4a1a1a,color:#fff
+    style H fill:#4a1a1a,color:#fff
+    style I fill:#1a3a4a,color:#fff
+    style J fill:#1a4a3a,color:#fff
+    style L fill:#2d4a22,color:#fff
+```
+
+---
+
+###  PermissionAuthorizationFilter — Detaje
+
+```mermaid
+flowchart LR
+    A([▶️ Enter]) --> B{shouldNot\nFilter?\n/api/auth/**}
+    B -->|Po public| C([SKIP\nkalon direkt])
+    B -->|Jo| D[userId =\nTenantContext\n.getUserId]
+    D --> E{userId\nnull?}
+    E -->|Po| F([kalon\npa kontroll])
+    E -->|Jo| G[JDBC query\npublic.permissions\nWHERE user_id=29]
+    G --> H[AntPathMatcher\nGET /api/admin\ndashboard/stats]
+    H --> I{Match\ngjetur?}
+    I -->|Jo| J([403\nForbidden])
+    I -->|Po| K[log Access granted\nuserId=29]
+    K --> L([✅ chain\n.doFilter])
+
+    style A fill:#2d1a4a,color:#fff
+    style C fill:#2d4a22,color:#fff
+    style F fill:#2d4a22,color:#fff
+    style G fill:#1a3a4a,color:#fff
+    style J fill:#4a1a1a,color:#fff
+    style L fill:#2d4a22,color:#fff
+```
+
+---
+
+###  DispatcherServlet → Controller → Service
+
+```mermaid
+flowchart LR
+    A([▶️ Dispatcher\nServlet]) --> B[RequestMapping\nHandlerMapping\nlooking up registry]
+    B --> C[GET /api/admin\ndashboard/stats\nDashboardController\n.getStats]
+    C --> D[DashboardController\nextends BaseController\nok - stats]
+    D --> E[DashboardService\n.getStats]
+    E --> F{@Cacheable\nRedis check\ndashboard-stats 8}
+    F -->|HIT 1ms| G([return Map\n0 DB queries])
+    F -->|MISS| H([continue to\nDB queries])
+
+    style A fill:#2d1a4a,color:#fff
+    style F fill:#4a3010,color:#fff
+    style G fill:#2d4a22,color:#fff
+    style H fill:#1a3a4a,color:#fff
+```
+
+---
+
+###  Multitenancy — Schema Routing
+
+```mermaid
+flowchart LR
+    A([▶️ Hibernate\nhap Session]) --> B[CurrentTenant\nIdentifierResolver\n.resolve]
+    B --> C[TenantContext\n.getSchemaName\nThreadLocal]
+    C --> D[tenant_prestige\n_estates_8]
+    D --> E[SchemaMultiTenant\nConnectionProvider\n.getConnection]
+    E --> F[HikariCP\nmerr connection\nnga pool]
+    F --> G[SET search_path TO\ntenant_prestige\n_estates_8 public]
+    G --> H([✅ Connection\nme schema\ntë saktë])
+
+    style A fill:#1a3a4a,color:#fff
+    style C fill:#4a3010,color:#fff
+    style D fill:#1a4a3a,color:#fff
+    style G fill:#2d1a4a,color:#fff
+    style H fill:#2d4a22,color:#fff
+```
+
+---
+
+###  DB Queries në Tenant Schema
+
+```mermaid
+flowchart LR
+    A([▶️ search_path\ntenant_prestige\n_estates_8]) --> B[COUNT properties\nAVAILABLE\n= 22]
+    B --> C[COUNT properties\nSOLD\n= 4]
+    C --> D[COUNT lease_contracts\nACTIVE\n= 4]
+    D --> E[COUNT payments\nOVERDUE\n= 1]
+    E --> F[COUNT lead_requests\nNEW\n= 3]
+    F --> G[SUM payments\nPAID\n= 3250.00]
+    G --> H[Redis.set\ndashboard-stats 8\nTTL=600s]
+    H --> I([✅ Map stats\ngati])
+
+    style A fill:#2d1a4a,color:#fff
+    style H fill:#4a3010,color:#fff
+    style I fill:#2d4a22,color:#fff
+```
+
+---
+
+###  Response — Kthehet Prapa
+
+```mermaid
+flowchart LR
+    A([✅ Map stats]) --> B[ResponseEntity\n.ok Map\nHTTP 200]
+    B --> C[Jackson\nserializon\nMap to JSON]
+    C --> D[Security Chain\nunwinds\nHeaderWriter\nSecurityContext clear]
+    D --> E[LoggingFilter\nduration=45ms\nlog 200 OK]
+    E --> F[TenantContext\n.clear\nThreadLocal\ncleanup]
+    F --> G[TCP Response\nHTTP 200 OK\napplication/json]
+    G --> H[axios\nstatus 200\nkalon direkt]
+    H --> I[setStats\nres.data]
+    I --> J([⚛️ React\nre-render\nUI update])
+
+    style A fill:#2d4a22,color:#fff
+    style D fill:#2d1a4a,color:#fff
+    style E fill:#4a3010,color:#fff
+    style F fill:#4a1a1a,color:#fff
+    style J fill:#2d4a22,color:#fff
+```
+
+---
+
+###  JWT Struktura dhe Validimi
+
+```mermaid
+flowchart LR
+    A([🔑 JWT Token\neyJhbGci...]) --> B[Header\nbase64url\nalg: HS256\ntyp: JWT]
+    B --> C[Payload\nbase64url\nsub: 29\ntenantId: 8\nschema: tenant_X\nrole: ADMIN\nexp: +1 ore]
+    C --> D[Signature\nHMACSHA256\nheader.payload\nSECRET_KEY]
+    D --> E[Rillogarit\nHMAC me\nSECRET_KEY]
+    E --> F{Përputhet\nme signature\nnë token?}
+    F -->|Jo| G([❌ 401\nInvalid])
+    F -->|Po| H{exp\n> now?}
+    H -->|Jo| I([❌ 401\nExpired])
+    H -->|Po| J([✅ Valid\nclaims\nekstraktohen])
+
+    style A fill:#4a3010,color:#fff
+    style D fill:#1a3a4a,color:#fff
+    style G fill:#4a1a1a,color:#fff
+    style I fill:#4a1a1a,color:#fff
+    style J fill:#2d4a22,color:#fff
+```
+
+---
+
+###  Access Token vs Refresh Token
+
+```mermaid
+flowchart LR
+    A([🔐 LOGIN]) --> B[Access Token\nJWT 1 ore\nStateless\nLocalStorage]
+    A --> C[Refresh Token\nJWT 7 dite\nDB refresh_tokens\nrevoked=false]
+
+    B --> D{Token\nskadon?}
+    D -->|Jo| E([✅ Request OK])
+    D -->|Po| F[axios 401\ninterceptor]
+    F --> G[POST /api/auth\n/refresh]
+    G --> H{DB check\nrevoked?}
+    H -->|true| I([❌ Logout\nforced])
+    H -->|false valid| J[Gjenero\naccess token\nte ri]
+    J --> K([✅ Retry OK])
+
+    C --> L[LOGOUT\nUPDATE SET\nrevoked=true]
+    L --> M([🚫 Bllokuar\npas 1 ore])
+
+    style A fill:#2d4a22,color:#fff
+    style B fill:#1a3a4a,color:#fff
+    style C fill:#4a3010,color:#fff
+    style I fill:#4a1a1a,color:#fff
+    style M fill:#4a1a1a,color:#fff
+    style K fill:#2d4a22,color:#fff
+    style E fill:#2d4a22,color:#fff
+```
+
+---
+
+###  TenantContext — ThreadLocal Lifecycle
+
+```mermaid
+flowchart LR
+    A([🔑 JwtAuthFilter\nekzekuton]) --> B[TenantContext.set\nuserId=29\ntenantId=8\nschema=tenant_X\nrole=ADMIN]
+    B --> C[ThreadLocal\nizoluar per\nkete thread]
+    C --> D[PermissionFilter\nlexon userId]
+    D --> E[TenantIdentifier\nResolver lexon\nschemaName]
+    E --> F[SchemaProvider\nperdor schemaName]
+    F --> G[Service\nlexon userId role]
+    G --> H[Response\nkthehet]
+    H --> I[TenantContext\n.clear\nremove ThreadLocals]
+    I --> J([♻️ Thread\ni paster\nper request\ntjeter])
+
+    style A fill:#4a3010,color:#fff
+    style B fill:#1a4a3a,color:#fff
+    style C fill:#2d1a4a,color:#fff
+    style I fill:#4a1a1a,color:#fff
+    style J fill:#2d4a22,color:#fff
+```
+
+---
+
+### Multi-Tenancy Isolation — Multiple Tenants
+
+```mermaid
+flowchart LR
+    A([👤 Admin\nTenant 8]) --> B[JWT schema=\ntenant_prestige\n_estates_8]
+    C([👤 Admin\nTenant 9]) --> D[JWT schema=\ntenant_acme_9]
+
+    B --> E[TenantContext\nThread 1]
+    D --> F[TenantContext\nThread 2]
+
+    E --> G[SET search_path\ntenant_prestige\n_estates_8]
+    F --> H[SET search_path\ntenant_acme_9]
+
+    G --> I[(tenant_prestige\n_estates_8\nproperties\ncontracts)]
+    H --> J[(tenant_acme_9\nproperties\ncontracts)]
+
+    I -. "izoluar plotesisht" .- J
+
+    style A fill:#2d4a22,color:#fff
+    style C fill:#1a3a4a,color:#fff
+    style E fill:#4a3010,color:#fff
+    style F fill:#4a3010,color:#fff
+    style I fill:#2d1a4a,color:#fff
+    style J fill:#2d1a4a,color:#fff
+```
 
 ## Technology Stack
 
