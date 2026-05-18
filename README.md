@@ -1014,4 +1014,6 @@ Flyway runs automatically on startup and applies all pending migrations. New ten
 
 **Soft deletes on core entities** — Properties, rental listings, and sale listings use a `deleted_at` timestamp column instead of hard deletes. All queries filter by `deleted_at IS NULL`. This preserves historical data and prevents orphaned references in contracts and applications.
 
+**JDBC direct in security middleware — `PermissionAuthorizationFilter` and `PermissionRepository` use raw JDBC via `DataSource` instead of extending `JpaRepository` for three reasons: (1) Hibernate routes all queries through `CurrentTenantIdentifierResolver` which would apply the tenant `search_path` to permission tables that must always read from `public`; (2) the filter executes before any Spring-managed transaction exists, making `EntityManager` unavailable; (3) raw JDBC skips JPQL parsing, entity mapping, and schema resolution — reducing overhead on the most frequently called query in the application.
+
 **BaseController for response consistency** — All controllers extend `BaseController` which provides unified helpers for building HTTP responses. This enforces consistent response patterns across the entire API and reduces boilerplate by 30-40% per controller with zero impact on endpoints or Swagger documentation.
