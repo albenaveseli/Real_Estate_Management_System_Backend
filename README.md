@@ -763,39 +763,50 @@ flowchart LR
 
 ---
 
-###  localStorage State — Before and After
+## localStorage State
+
+## Para / Gjate / Pas Impersonation
 
 ```mermaid
 flowchart LR
-    subgraph "Para Impersonation"
-        A1["access_token\nadminToken userId=29"]
+    subgraph PARA[Para Impersonation]
+        A1["access_token\nadminToken\nuserId=29"]
         A2["refresh_token\nadminRefresh"]
         A3["user_info\nid=29 role=admin"]
     end
 
-    subgraph "Gjatë Impersonation"
-        B1["access_token\nimpersonToken userId=30"]
+    subgraph GJATE[Gjate Impersonation]
+        B1["access_token\nimpersonToken\nuserId=30"]
         B2["refresh_token\nadminRefresh"]
         B3["user_info\nid=30 role=agent"]
-        B4["admin_token\nadminToken BACKUP"]
-        B5["admin_user_info\nid=29 BACKUP"]
-        B6["impersonating\nemail=anita role=AGENT"]
+        B4["admin_token\nBACKUP adminToken"]
+        B5["admin_user_info\nBACKUP id=29"]
+        B6["impersonating\nemail=anita\nrole=AGENT"]
     end
 
-    subgraph "Pas Exit"
-        C1["access_token\nadminToken userId=29"]
+    subgraph PAS[Pas Exit]
+        C1["access_token\nadminToken\nuserId=29"]
         C2["refresh_token\nadminRefresh"]
         C3["user_info\nid=29 role=admin"]
     end
 
     A1 --> B1
+    A2 --> B2
+    A3 --> B3
     B4 --> C1
+    B2 --> C2
     B5 --> C3
 
+    style B1 fill:#4a1a1a,color:#fff
     style B4 fill:#4a3010,color:#fff
     style B5 fill:#4a3010,color:#fff
     style B6 fill:#4a1a1a,color:#fff
-    style B1 fill:#4a1a1a,color:#fff
+    style A1 fill:#1a3a4a,color:#fff
+    style A2 fill:#1a3a4a,color:#fff
+    style A3 fill:#1a3a4a,color:#fff
+    style C1 fill:#2d4a22,color:#fff
+    style C2 fill:#2d4a22,color:#fff
+    style C3 fill:#2d4a22,color:#fff
 ```
 
 ---
