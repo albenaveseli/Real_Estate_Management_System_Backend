@@ -131,4 +131,132 @@ class RentalServiceTest {
         assertThatThrownBy(() -> rentalService.getListingById(999L))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // createListing
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("createListing — input i vlefshëm → krijohet listing")
+    void createListing_success() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+        when(listingRepo.existsOverlappingListing(any(), any(), any())).thenReturn(false);
+
+        RentalListing saved = activeListing(prop);
+        when(listingRepo.save(any())).thenReturn(saved);
+
+        RentalListingCreateRequest req = new RentalListingCreateRequest(
+                1L, "Title", "Desc",
+                LocalDate.now().plusDays(1), LocalDate.now().plusMonths(6),
+                new BigDecimal("500"), "EUR", new BigDecimal("1000"),
+                "MONTHLY", 12
+        );
+
+        RentalListingResponse resp = rentalService.createListing(req);
+
+        assertThat(resp).isNotNull();
+        verify(listingRepo).save(any());
+    }
+
+    @Test
+    @DisplayName("createListing — prona është vetëm për shitje → ConflictException")
+    void createListing_saleOnlyProperty_throwsConflict() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        prop.setListingType(ListingType.SALE);
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+
+        RentalListingCreateRequest req = new RentalListingCreateRequest(
+                1L, "Title", "Desc", null, null,
+                new BigDecimal("500"), "EUR", null, "MONTHLY", 12
+        );
+
+        assertThatThrownBy(() -> rentalService.createListing(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("shitje");
+    }
+
+    @Test
+    @DisplayName("createListing — prona është shitur → ConflictException")
+    void createListing_soldProperty_throwsConflict() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        prop.setStatus(PropertyStatus.SOLD);
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+
+        RentalListingCreateRequest req = new RentalListingCreateRequest(
+                1L, "Title", "Desc", null, null,
+                new BigDecimal("500"), "EUR", null, "MONTHLY", 12
+        );
+
+        assertThatThrownBy(() -> rentalService.createListing(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("sold");
+    }
+
+    @Test
+    @DisplayName("createListing — datave overlapping → ConflictException")
+    void createListing_overlappingDates_throwsConflict() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+        when(listingRepo.existsOverlappingListing(any(), any(), any())).thenReturn(true);
+
+        RentalListingCreateRequest req = new RentalListingCreateRequest(
+                1L, "Title", "Desc",
+                LocalDate.now().plusDays(1), LocalDate.now().plusMonths(6),
+                new BigDecimal("500"), "EUR", null, "MONTHLY", 12
+        );
+
+        assertThatThrownBy(() -> rentalService.createListing(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("listing aktiv");
+    }
+
+    @Test
+    @DisplayName("createListing — price negative → IllegalArgumentException")
+    void createListing_negativePrice_throws() {
+        RentalListingCreateRequest req = new RentalListingCreateRequest(
+                1L, "Title", "Desc", null, null,
+                new BigDecimal("-100"), "EUR", null, "MONTHLY", 12
+        );
+
+        assertThatThrownBy(() -> rentalService.createListing(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Price");
+    }
+
+    @Test
+    @DisplayName("createListing — currency e pavlefshme → IllegalArgumentException")
+    void createListing_invalidCurrency_throws() {
+        RentalListingCreateRequest req = new RentalListingCreateRequest(
+                1L, "Title", "Desc", null, null,
+                new BigDecimal("500"), "XYZ", null, "MONTHLY", 12
+        );
+
+        assertThatThrownBy(() -> rentalService.createListing(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Currency");
+    }
+
+    @Test
+    @DisplayName("createListing — availableUntil para availableFrom → IllegalArgumentException")
+    void createListing_invalidDateRange_throws() {
+        RentalListingCreateRequest req = new RentalListingCreateRequest(
+                1L, "Title", "Desc",
+                LocalDate.now().plusMonths(3), LocalDate.now().plusDays(1),
+                new BigDecimal("500"), "EUR", null, "MONTHLY", 12
+        );
+
+        assertThatThrownBy(() -> rentalService.createListing(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("availableUntil");
+    }
+
 }
