@@ -428,4 +428,148 @@ class RentalServiceTest {
                 .hasMessageContaining("Move-in date");
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // reviewApplication
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("reviewApplication — APPROVE sukses, notifikacion dërguar klientit")
+    void reviewApplication_approve_success() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+
+        RentalApplication app = new RentalApplication();
+        app.setId(200L);
+        app.setListing(listing);
+        app.setClientId(50L);
+        app.setStatus(RentalApplicationStatus.PENDING);
+
+        RentalApplication reviewed = new RentalApplication();
+        reviewed.setId(200L);
+        reviewed.setListing(listing);
+        reviewed.setClientId(50L);
+        reviewed.setStatus(RentalApplicationStatus.APPROVED);
+        reviewed.setCreatedAt(LocalDateTime.now());
+
+        when(applicationRepo.findById(200L))
+                .thenReturn(Optional.of(app))
+                .thenReturn(Optional.of(reviewed));
+        when(applicationRepo.existsByListing_IdAndStatusAndIdNot(any(), any(), any()))
+                .thenReturn(false);
+
+        RentalApplicationReviewRequest req = new RentalApplicationReviewRequest(
+                RentalApplicationStatus.APPROVED, null
+        );
+
+        RentalApplicationResponse resp = rentalService.reviewApplication(200L, req);
+
+        assertThat(resp.status()).isEqualTo(RentalApplicationStatus.APPROVED);
+        verify(applicationRepo).reviewApplication(eq(200L),
+                eq(RentalApplicationStatus.APPROVED), any(), any());
+        verify(notificationService).sendNotification(
+                eq(50L), anyString(), anyString(),
+                eq(NotificationType.SUCCESS), anyString(), eq(200L), anyString()
+        );
+    }
+
+    @Test
+    @DisplayName("reviewApplication — APPROVE por lista ka tashmë approved → ConflictException")
+    void reviewApplication_approveWhenAlreadyApproved_throwsConflict() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+
+        RentalApplication app = new RentalApplication();
+        app.setId(200L);
+        app.setListing(listing);
+        app.setClientId(50L);
+        app.setStatus(RentalApplicationStatus.PENDING);
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+        when(applicationRepo.existsByListing_IdAndStatusAndIdNot(any(), any(), any()))
+                .thenReturn(true);
+
+        RentalApplicationReviewRequest req = new RentalApplicationReviewRequest(
+                RentalApplicationStatus.APPROVED, null
+        );
+
+        assertThatThrownBy(() -> rentalService.reviewApplication(200L, req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("approved application");
+    }
+
+    @Test
+    @DisplayName("reviewApplication — aplikim jo PENDING → ConflictException")
+    void reviewApplication_notPending_throwsConflict() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        RentalApplication app = new RentalApplication();
+        app.setId(200L);
+        app.setStatus(RentalApplicationStatus.APPROVED);
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+
+        RentalApplicationReviewRequest req = new RentalApplicationReviewRequest(
+                RentalApplicationStatus.REJECTED, null
+        );
+
+        assertThatThrownBy(() -> rentalService.reviewApplication(200L, req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("shqyrtuar");
+    }
+
+    @Test
+    @DisplayName("reviewApplication — CLIENT → ForbiddenException")
+    void reviewApplication_client_throwsForbidden() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        RentalApplicationReviewRequest req = new RentalApplicationReviewRequest(
+                RentalApplicationStatus.APPROVED, null
+        );
+
+        assertThatThrownBy(() -> rentalService.reviewApplication(200L, req))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // cancelApplication
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("cancelApplication — PENDING → anulohet")
+    void cancelApplication_pending_success() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        RentalApplication app = new RentalApplication();
+        app.setId(200L);
+        app.setClientId(50L);
+        app.setStatus(RentalApplicationStatus.PENDING);
+
+        when(applicationRepo.findByIdAndClientId(200L, 50L)).thenReturn(Optional.of(app));
+
+        rentalService.cancelApplication(200L);
+
+        verify(applicationRepo).reviewApplication(eq(200L),
+                eq(RentalApplicationStatus.CANCELLED), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("cancelApplication — aplikim jo PENDING → ConflictException")
+    void cancelApplication_notPending_throwsConflict() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        RentalApplication app = new RentalApplication();
+        app.setId(200L);
+        app.setClientId(50L);
+        app.setStatus(RentalApplicationStatus.APPROVED);
+
+        when(applicationRepo.findByIdAndClientId(200L, 50L)).thenReturn(Optional.of(app));
+
+        assertThatThrownBy(() -> rentalService.cancelApplication(200L))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("PENDING");
+    }
 }
