@@ -1,21 +1,14 @@
 package com.realestate.backend.service;
 
-import com.realestate.backend.dto.rental.RentalDtos.*;
-import com.realestate.backend.entity.enums.ListingType;
-import com.realestate.backend.entity.enums.NotificationType;
+import com.realestate.backend.dto.sale.SaleApplicationDtos.*;
 import com.realestate.backend.entity.enums.PropertyStatus;
-import com.realestate.backend.entity.enums.RentalApplicationStatus;
+import com.realestate.backend.entity.enums.SaleStatus;
 import com.realestate.backend.entity.property.Property;
-import com.realestate.backend.entity.rental.RentalApplication;
-import com.realestate.backend.entity.rental.RentalListing;
-import com.realestate.backend.exception.BadRequestException;
-import com.realestate.backend.exception.ConflictException;
-import com.realestate.backend.exception.ForbiddenException;
-import com.realestate.backend.exception.ResourceNotFoundException;
+import com.realestate.backend.entity.sale.SaleApplication;
+import com.realestate.backend.entity.sale.SaleListing;
+import com.realestate.backend.exception.*;
 import com.realestate.backend.multitenancy.TenantContext;
-import com.realestate.backend.repository.PropertyRepository;
-import com.realestate.backend.repository.RentalApplicationRepository;
-import com.realestate.backend.repository.RentalListingRepository;
+import com.realestate.backend.repository.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -33,22 +26,24 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class RentalServiceTest {
+class SaleApplicationServiceTest {
 
     @Mock
-    RentalListingRepository listingRepo;
+    SaleApplicationRepository applicationRepo;
     @Mock
-    RentalApplicationRepository applicationRepo;
+    SaleListingRepository listingRepo;
     @Mock
     PropertyRepository propertyRepo;
     @Mock
-    NotificationService notificationService;
+    UserRepository userRepo;
 
-    RentalService rentalService;
+    SaleApplicationService saleApplicationService;
 
     @BeforeEach
     void setUp() {
-        rentalService = new RentalService(listingRepo, applicationRepo, propertyRepo, notificationService);
+        saleApplicationService = new SaleApplicationService(
+                applicationRepo, listingRepo, propertyRepo, userRepo
+        );
     }
 
     @AfterEach
@@ -61,74 +56,204 @@ class RentalServiceTest {
     private Property activeProperty() {
         Property p = new Property();
         p.setId(1L);
-        p.setListingType(ListingType.RENT);
         p.setStatus(PropertyStatus.AVAILABLE);
-        p.setAgentId(10L);
-        p.setTitle("Test Property");
         return p;
     }
 
-    private RentalListing activeListing(Property property) {
-        RentalListing l = new RentalListing();
+    private SaleListing activeListing(Property property) {
+        SaleListing l = new SaleListing();
         l.setId(100L);
         l.setProperty(property);
         l.setAgentId(10L);
-        l.setTitle("Test Listing");
-        l.setPrice(new BigDecimal("500.00"));
-        l.setCurrency("EUR");
-        l.setPricePeriod("MONTHLY");
-        l.setMinLeaseMonths(12);
-        l.setStatus("ACTIVE");
-        l.setAvailableFrom(LocalDate.now().minusDays(10));
-        l.setAvailableUntil(LocalDate.now().plusMonths(6));
+        l.setStatus(SaleStatus.ACTIVE);
+        l.setPrice(new BigDecimal("150000"));
         l.setCreatedAt(LocalDateTime.now());
         l.setUpdatedAt(LocalDateTime.now());
         return l;
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // getAllListings
-    // ═══════════════════════════════════════════════════════════════════════
-
-    @Test
-    @DisplayName("getAllListings — kthehet faqja me listings")
-    void getAllListings_returnsPage() {
-        Property prop = activeProperty();
-        RentalListing listing = activeListing(prop);
-        Page<RentalListing> page = new PageImpl<>(List.of(listing));
-        Pageable pageable = PageRequest.of(0, 10);
-
-        when(listingRepo.findAllByDeletedAtIsNull(pageable)).thenReturn(page);
-
-        Page<RentalListingResponse> result = rentalService.getAllListings(pageable);
-
-        assertThat(result.getTotalElements()).isEqualTo(1);
-        assertThat(result.getContent().get(0).id()).isEqualTo(100L);
+    private SaleApplication pendingApp(SaleListing listing) {
+        SaleApplication a = new SaleApplication();
+        a.setId(200L);
+        a.setListing(listing);
+        a.setProperty(listing.getProperty());
+        a.setBuyerId(50L);
+        a.setAgentId(10L);
+        a.setStatus("PENDING");
+        a.setCreatedAt(LocalDateTime.now());
+        a.setUpdatedAt(LocalDateTime.now());
+        return a;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // getListingById
+    // createApplication
     // ═══════════════════════════════════════════════════════════════════════
 
     @Test
-    @DisplayName("getListingById — listing ekziston → kthehet response")
-    void getListingById_found() {
+    @DisplayName("createApplication — sukses")
+    void createApplication_success() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
         Property prop = activeProperty();
-        RentalListing listing = activeListing(prop);
+        SaleListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+        when(applicationRepo.findByListing_IdAndBuyerIdAndStatusIn(any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        SaleApplication saved = pendingApp(listing);
+        when(applicationRepo.save(any())).thenReturn(saved);
+
+        SaleApplicationCreateRequest req = new SaleApplicationCreateRequest(
+                100L, "Message", new BigDecimal("145000"),
+                LocalDate.now().plusMonths(1), new BigDecimal("3000")
+        );
+
+        SaleApplicationResponse resp = saleApplicationService.createApplication(req);
+
+        assertThat(resp.id()).isEqualTo(200L);
+        assertThat(resp.status()).isEqualTo("PENDING");
+        verify(applicationRepo).save(any());
+    }
+
+    @Test
+    @DisplayName("createApplication — listing jo aktiv → InvalidStateException")
+    void createApplication_inactiveListing_throwsInvalidState() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        listing.setStatus(SaleStatus.CANCELLED);
         when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
 
-        RentalListingResponse resp = rentalService.getListingById(100L);
+        SaleApplicationCreateRequest req = new SaleApplicationCreateRequest(
+                100L, null, null, null, null
+        );
 
-        assertThat(resp.id()).isEqualTo(100L);
-        assertThat(resp.status()).isEqualTo("ACTIVE");
+        assertThatThrownBy(() -> saleApplicationService.createApplication(req))
+                .isInstanceOf(InvalidStateException.class)
+                .hasMessageContaining("aktiv");
     }
 
     @Test
-    @DisplayName("getListingById — listing nuk ekziston → ResourceNotFoundException")
-    void getListingById_notFound() {
+    @DisplayName("createApplication — prona e shitur → InvalidStateException")
+    void createApplication_soldProperty_throwsInvalidState() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        prop.setStatus(PropertyStatus.SOLD);
+        SaleListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+
+        SaleApplicationCreateRequest req = new SaleApplicationCreateRequest(
+                100L, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> saleApplicationService.createApplication(req))
+                .isInstanceOf(InvalidStateException.class)
+                .hasMessageContaining("disponueshme");
+    }
+
+    @Test
+    @DisplayName("createApplication — prona me qira → ConflictException")
+    void createApplication_rentedProperty_throwsConflict() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        prop.setStatus(PropertyStatus.RENTED);
+        SaleListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+
+        SaleApplicationCreateRequest req = new SaleApplicationCreateRequest(
+                100L, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> saleApplicationService.createApplication(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("qira");
+    }
+
+    @Test
+    @DisplayName("createApplication — duplikat PENDING → ConflictException")
+    void createApplication_duplicatePending_throwsConflict() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication existing = pendingApp(listing);
+
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+        when(applicationRepo.findByListing_IdAndBuyerIdAndStatusIn(any(), any(), any()))
+                .thenReturn(Optional.of(existing));
+
+        SaleApplicationCreateRequest req = new SaleApplicationCreateRequest(
+                100L, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> saleApplicationService.createApplication(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("aplikim");
+    }
+
+    @Test
+    @DisplayName("createApplication — listing nuk ekziston → ResourceNotFoundException")
+    void createApplication_listingNotFound_throws() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
         when(listingRepo.findByIdAndDeletedAtIsNull(999L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> rentalService.getListingById(999L))
+        SaleApplicationCreateRequest req = new SaleApplicationCreateRequest(
+                999L, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> saleApplicationService.createApplication(req))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // getMyApplications
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("getMyApplications — kthehet faqja me aplikimet e buyer-it")
+    void getMyApplications_returnsPage() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        Page<SaleApplication> page = new PageImpl<>(List.of(app));
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(applicationRepo.findByBuyerIdOrderByCreatedAtDesc(50L, pageable)).thenReturn(page);
+
+        Page<SaleApplicationResponse> result = saleApplicationService.getMyApplications(pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).buyerId()).isEqualTo(50L);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // cancelMyApplication
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("cancelMyApplication — PENDING → anulohet")
+    void cancelMyApplication_pending_success() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        SaleApplication cancelled = pendingApp(listing);
+        cancelled.setStatus("CANCELLED");
+
+        when(applicationRepo.findById(200L))
+                .thenReturn(Optional.of(app))
+                .thenReturn(Optional.of(cancelled));
+
+        SaleApplicationResponse resp = saleApplicationService.cancelMyApplication(200L);
+
+        assertThat(resp.status()).isEqualTo("CANCELLED");
+        verify(applicationRepo).updateStatus(200L, "CANCELLED");
     }
 }
