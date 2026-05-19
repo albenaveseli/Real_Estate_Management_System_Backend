@@ -423,3 +423,83 @@ class MaintenanceServiceTest {
         assertThatThrownBy(() -> maintenanceService.updateStatus(300L, req))
                 .isInstanceOf(ForbiddenException.class);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // assign
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("assign — ADMIN → asinjoi dhe vendosi IN_PROGRESS, notifikacion dërguar")
+    void assign_admin_success() {
+        TenantContext.set(1L, 1L, "tenant_1", "ADMIN");
+
+        Property prop = property();
+        MaintenanceRequest mr = openRequest(prop);
+        when(maintenanceRepo.findById(300L)).thenReturn(Optional.of(mr));
+        when(maintenanceRepo.save(any())).thenReturn(mr);
+
+        MaintenanceAssignRequest req = new MaintenanceAssignRequest(20L);
+
+        MaintenanceResponse resp = maintenanceService.assign(300L, req);
+
+        assertThat(mr.getAssignedTo()).isEqualTo(20L);
+        assertThat(mr.getStatus()).isEqualTo(MaintenanceStatus.IN_PROGRESS);
+        verify(notificationService).sendNotification(
+                eq(20L), anyString(), anyString(),
+                eq(NotificationType.REMINDER), anyString(), eq(300L), anyString()
+        );
+    }
+
+    @Test
+    @DisplayName("assign — CLIENT → ForbiddenException")
+    void assign_client_throwsForbidden() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        MaintenanceAssignRequest req = new MaintenanceAssignRequest(20L);
+
+        assertThatThrownBy(() -> maintenanceService.assign(300L, req))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("assign — kërkesa nuk ekziston → ResourceNotFoundException")
+    void assign_notFound_throws() {
+        TenantContext.set(1L, 1L, "tenant_1", "ADMIN");
+
+        when(maintenanceRepo.findById(999L)).thenReturn(Optional.empty());
+
+        MaintenanceAssignRequest req = new MaintenanceAssignRequest(20L);
+
+        assertThatThrownBy(() -> maintenanceService.assign(999L, req))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // getUrgentOpen
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("getUrgentOpen — AGENT → kthehet lista urgjente")
+    void getUrgentOpen_agent_returnsList() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = property();
+        MaintenanceRequest mr = openRequest(prop);
+        mr.setPriority(MaintenancePriority.URGENT);
+        when(maintenanceRepo.findUrgentOpen()).thenReturn(List.of(mr));
+
+        List<MaintenanceResponse> result = maintenanceService.getUrgentOpen();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).priority()).isEqualTo(MaintenancePriority.URGENT);
+    }
+
+    @Test
+    @DisplayName("getUrgentOpen — CLIENT → ForbiddenException")
+    void getUrgentOpen_client_throwsForbidden() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        assertThatThrownBy(() -> maintenanceService.getUrgentOpen())
+                .isInstanceOf(ForbiddenException.class);
+    }
+}
