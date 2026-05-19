@@ -24,7 +24,6 @@ public class SavedPropertyService {
     private final SavedPropertyRepository savedRepo;
     private final PropertyRepository      propertyRepo;
 
-    // ── Merr të gjitha pronat e ruajtura nga useri aktual ────────
     @Transactional(readOnly = true)
     public Page<SavedPropertyResponse> getMySaved(Pageable pageable) {
         Long userId = TenantContext.getUserId();
@@ -32,7 +31,6 @@ public class SavedPropertyService {
                 .map(this::toResponse);
     }
 
-    // ── Ruaj pronën ───────────────────────────────────────────────
     @Transactional
     public SavedPropertyResponse save(Long propertyId, String note) {
         Long userId = TenantContext.getUserId();
@@ -56,7 +54,6 @@ public class SavedPropertyService {
         return toResponse(result);
     }
 
-    // ── Fshij nga të ruajturat ────────────────────────────────────
     @Transactional
     public void unsave(Long propertyId) {
         Long userId = TenantContext.getUserId();
@@ -69,14 +66,12 @@ public class SavedPropertyService {
         log.info("Property unsaved: userId={}, propertyId={}", userId, propertyId);
     }
 
-    // ── A është e ruajtur? ────────────────────────────────────────
     @Transactional(readOnly = true)
     public boolean isSaved(Long propertyId) {
         Long userId = TenantContext.getUserId();
         return savedRepo.existsByUserIdAndProperty_Id(userId, propertyId);
     }
 
-    // ── Mapper ───────────────────────────────────────────────────
     private SavedPropertyResponse toResponse(SavedProperty s) {
         Property p = s.getProperty();
 

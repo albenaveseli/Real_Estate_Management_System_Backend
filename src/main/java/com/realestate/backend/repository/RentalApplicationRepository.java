@@ -20,10 +20,6 @@ public interface RentalApplicationRepository extends JpaRepository<RentalApplica
     // Aplikimet e klientit
     Page<RentalApplication> findByClientIdOrderByCreatedAtDesc(Long clientId, Pageable pageable);
 
-    // Aplikimet sipas statusit
-    Page<RentalApplication> findByStatusOrderByCreatedAtDesc(
-            RentalApplicationStatus status, Pageable pageable);
-
     // A ka aplikim aktiv ky klient për këtë listing?
     boolean existsByListing_IdAndClientIdAndStatusIn(
             Long listingId, Long clientId, List<RentalApplicationStatus> statuses);
@@ -47,8 +43,6 @@ public interface RentalApplicationRepository extends JpaRepository<RentalApplica
             @Param("reason") String reason
     );
 
-    // Numëro aplikimet PENDING për një listing
-    long countByListing_IdAndStatus(Long listingId, RentalApplicationStatus status);
 
     boolean existsByListing_IdAndStatusAndIdNot(
             Long listingId,

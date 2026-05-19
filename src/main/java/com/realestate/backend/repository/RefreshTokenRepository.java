@@ -14,36 +14,4 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     Optional<RefreshToken> findByToken(String token);
 
-
-    @Modifying
-    @Transactional
-    @Query("""
-        UPDATE RefreshToken rt
-        SET rt.revoked = true
-        WHERE rt.user.id = :userId
-    """)
-    void revokeAllForUser(@Param("userId") Long userId);
-
-
-    @Modifying
-    @Transactional
-    @Query("""
-        DELETE FROM RefreshToken rt
-        WHERE rt.expiresAt < :now
-           OR rt.revoked = true
-    """)
-    int deleteExpiredAndRevoked(@Param("now") LocalDateTime now);
-
-
-    @Query("""
-        SELECT CASE WHEN COUNT(rt) > 0 THEN true ELSE false END
-        FROM RefreshToken rt
-        WHERE rt.token = :token
-          AND rt.revoked = false
-          AND rt.expiresAt > :now
-    """)
-    boolean existsValidToken(
-            @Param("token") String token,
-            @Param("now") LocalDateTime now
-    );
 }

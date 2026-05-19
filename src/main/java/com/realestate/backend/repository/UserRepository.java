@@ -13,7 +13,6 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findById(Long id);
-    Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
 
@@ -35,19 +34,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     """)
     List<User> findAllByTenantId(@Param("tenantId") Long tenantId);
 
-
-    long countByTenant_IdAndRole(Long tenantId, Role role);
-
-
-    @Query("""
-        SELECT u FROM User u
-        WHERE u.tenant.id = :tenantId
-          AND u.isActive = true
-          AND u.deletedAt IS NULL
-    """)
-    List<User> findActiveByTenant(@Param("tenantId") Long tenantId);
-
-    // Shto këtë metodë — merr emrin e plotë sipas ID
     // Përdoret nga LeadService për të marrë emrat e agjentit dhe klientit
     @Query("SELECT u.firstName || ' ' || u.lastName FROM User u WHERE u.id = :id")
     Optional<String> findFullNameById(@Param("id") Long id);

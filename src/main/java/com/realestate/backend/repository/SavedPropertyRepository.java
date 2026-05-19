@@ -18,9 +18,6 @@ public interface SavedPropertyRepository extends JpaRepository<SavedProperty, Lo
     // A e ka ruajtur ky user këtë pronë?
     boolean existsByUserIdAndProperty_Id(Long userId, Long propertyId);
 
-    // Gjej saved entry specifik
-    Optional<SavedProperty> findByUserIdAndProperty_Id(Long userId, Long propertyId);
-
     // Fshi me userId + propertyId
     @Modifying
     @Query("""
@@ -33,6 +30,4 @@ public interface SavedPropertyRepository extends JpaRepository<SavedProperty, Lo
             @Param("propertyId") Long propertyId
     );
 
-    // Sa prona ka ruajtur ky user
-    long countByUserId(Long userId);
 }
