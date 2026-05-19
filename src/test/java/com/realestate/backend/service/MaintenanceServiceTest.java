@@ -304,3 +304,122 @@ class MaintenanceServiceTest {
 
         assertThat(captor.getValue().getPriority()).isEqualTo(MaintenancePriority.MEDIUM);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // update
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("update — ADMIN → ndryshon fushat e dhëna")
+    void update_admin_updatesFields() {
+        TenantContext.set(1L, 1L, "tenant_1", "ADMIN");
+
+        Property prop = property();
+        MaintenanceRequest mr = openRequest(prop);
+        when(maintenanceRepo.findById(300L)).thenReturn(Optional.of(mr));
+        when(maintenanceRepo.save(any())).thenReturn(mr);
+
+        MaintenanceUpdateRequest req = new MaintenanceUpdateRequest(
+                "Titulli i ri", "Përshkrim i ri", MaintenanceCategory.ELECTRICAL,
+                MaintenancePriority.LOW, new BigDecimal("150"), new BigDecimal("180")
+        );
+
+        MaintenanceResponse resp = maintenanceService.update(300L, req);
+
+        assertThat(resp).isNotNull();
+        verify(maintenanceRepo).save(any());
+    }
+
+    @Test
+    @DisplayName("update — CLIENT → ForbiddenException")
+    void update_client_throwsForbidden() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        MaintenanceUpdateRequest req = new MaintenanceUpdateRequest(
+                null, null, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> maintenanceService.update(300L, req))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // updateStatus
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("updateStatus — COMPLETED → vendoset completedAt dhe dërgon notifikacion")
+    void updateStatus_completed_setsCompletedAtAndNotifies() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = property();
+        MaintenanceRequest mr = openRequest(prop);
+        mr.setStatus(MaintenanceStatus.IN_PROGRESS);
+
+        when(maintenanceRepo.findById(300L)).thenReturn(Optional.of(mr));
+        when(maintenanceRepo.save(any())).thenReturn(mr);
+
+        MaintenanceStatusRequest req = new MaintenanceStatusRequest(
+                MaintenanceStatus.COMPLETED, null
+        );
+
+        maintenanceService.updateStatus(300L, req);
+
+        assertThat(mr.getCompletedAt()).isNotNull();
+        verify(notificationService).sendNotification(
+                eq(50L), anyString(), anyString(),
+                eq(NotificationType.SUCCESS), anyString(), eq(300L), anyString()
+        );
+    }
+
+    @Test
+    @DisplayName("updateStatus — IN_PROGRESS → nuk dërgon notifikacion")
+    void updateStatus_inProgress_noNotification() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = property();
+        MaintenanceRequest mr = openRequest(prop);
+        when(maintenanceRepo.findById(300L)).thenReturn(Optional.of(mr));
+        when(maintenanceRepo.save(any())).thenReturn(mr);
+
+        MaintenanceStatusRequest req = new MaintenanceStatusRequest(
+                MaintenanceStatus.IN_PROGRESS, null
+        );
+
+        maintenanceService.updateStatus(300L, req);
+
+        assertThat(mr.getCompletedAt()).isNull();
+        verify(notificationService, never()).sendNotification(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("updateStatus — me actualCost → vendoset actualCost")
+    void updateStatus_withActualCost_setsActualCost() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = property();
+        MaintenanceRequest mr = openRequest(prop);
+        when(maintenanceRepo.findById(300L)).thenReturn(Optional.of(mr));
+        when(maintenanceRepo.save(any())).thenReturn(mr);
+
+        MaintenanceStatusRequest req = new MaintenanceStatusRequest(
+                MaintenanceStatus.IN_PROGRESS, new BigDecimal("350")
+        );
+
+        maintenanceService.updateStatus(300L, req);
+
+        assertThat(mr.getActualCost()).isEqualByComparingTo("350");
+    }
+
+    @Test
+    @DisplayName("updateStatus — CLIENT → ForbiddenException")
+    void updateStatus_client_throwsForbidden() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        MaintenanceStatusRequest req = new MaintenanceStatusRequest(
+                MaintenanceStatus.COMPLETED, null
+        );
+
+        assertThatThrownBy(() -> maintenanceService.updateStatus(300L, req))
+                .isInstanceOf(ForbiddenException.class);
+    }
