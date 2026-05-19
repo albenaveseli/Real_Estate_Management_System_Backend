@@ -259,4 +259,173 @@ class RentalServiceTest {
                 .hasMessageContaining("availableUntil");
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // updateListing
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("updateListing — ADMIN mund të ndryshojë çdo listing")
+    void updateListing_adminCanUpdate() {
+        TenantContext.set(99L, 1L, "tenant_1", "ADMIN");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+        when(listingRepo.save(any())).thenReturn(listing);
+
+        RentalListingUpdateRequest req = new RentalListingUpdateRequest(
+                "New Title", null, null, null, null, null, null, null, null, null
+        );
+
+        RentalListingResponse resp = rentalService.updateListing(100L, req);
+        assertThat(resp).isNotNull();
+        verify(listingRepo).save(any());
+    }
+
+    @Test
+    @DisplayName("updateListing — AGENT tjetër → ForbiddenException")
+    void updateListing_differentAgent_throwsForbidden() {
+        TenantContext.set(20L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop); // agentId = 10
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+
+        RentalListingUpdateRequest req = new RentalListingUpdateRequest(
+                "New Title", null, null, null, null, null, null, null, null, null
+        );
+
+        assertThatThrownBy(() -> rentalService.updateListing(100L, req))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // deleteListing
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("deleteListing — ADMIN → soft delete")
+    void deleteListing_admin_success() {
+        TenantContext.set(1L, 1L, "tenant_1", "ADMIN");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+
+        rentalService.deleteListing(100L);
+
+        verify(listingRepo).softDelete(100L);
+    }
+
+    @Test
+    @DisplayName("deleteListing — CLIENT → ForbiddenException")
+    void deleteListing_client_throwsForbidden() {
+        TenantContext.set(5L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> rentalService.deleteListing(100L))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // applyForListing
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("applyForListing — sukses, notifikacion dërguar agjentit")
+    void applyForListing_success_sendsNotification() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+        when(applicationRepo.existsByListing_IdAndClientIdAndStatusIn(any(), any(), any()))
+                .thenReturn(false);
+
+        RentalApplication savedApp = new RentalApplication();
+        savedApp.setId(200L);
+        savedApp.setListing(listing);
+        savedApp.setClientId(50L);
+        savedApp.setStatus(RentalApplicationStatus.PENDING);
+        savedApp.setCreatedAt(LocalDateTime.now());
+        when(applicationRepo.save(any())).thenReturn(savedApp);
+
+        RentalApplicationCreateRequest req = new RentalApplicationCreateRequest(
+                100L, "Message", new BigDecimal("2000"),
+                LocalDate.now().plusDays(5)
+        );
+
+        RentalApplicationResponse resp = rentalService.applyForListing(req);
+
+        assertThat(resp.id()).isEqualTo(200L);
+        assertThat(resp.status()).isEqualTo(RentalApplicationStatus.PENDING);
+        verify(notificationService).sendNotification(
+                eq(10L), anyString(), anyString(),
+                eq(NotificationType.INFO), anyString(), eq(200L), anyString()
+        );
+    }
+
+    @Test
+    @DisplayName("applyForListing — listing jo aktiv → ConflictException")
+    void applyForListing_inactiveListing_throwsConflict() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+        listing.setStatus("INACTIVE");
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+
+        RentalApplicationCreateRequest req = new RentalApplicationCreateRequest(
+                100L, null, null, null
+        );
+
+        assertThatThrownBy(() -> rentalService.applyForListing(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("aktiv");
+    }
+
+    @Test
+    @DisplayName("applyForListing — duplikat PENDING → ConflictException")
+    void applyForListing_duplicatePending_throwsConflict() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+        when(applicationRepo.existsByListing_IdAndClientIdAndStatusIn(any(), any(), any()))
+                .thenReturn(true);
+
+        RentalApplicationCreateRequest req = new RentalApplicationCreateRequest(
+                100L, null, null, null
+        );
+
+        assertThatThrownBy(() -> rentalService.applyForListing(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("aplikim aktiv");
+    }
+
+    @Test
+    @DisplayName("applyForListing — moveInDate para availableFrom → BadRequestException")
+    void applyForListing_moveInDateBeforeAvailableFrom_throws() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        RentalListing listing = activeListing(prop);
+        listing.setAvailableFrom(LocalDate.now().plusDays(10));
+        when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
+        when(applicationRepo.existsByListing_IdAndClientIdAndStatusIn(any(), any(), any()))
+                .thenReturn(false);
+
+        RentalApplicationCreateRequest req = new RentalApplicationCreateRequest(
+                100L, null, null, LocalDate.now().plusDays(1)
+        );
+
+        assertThatThrownBy(() -> rentalService.applyForListing(req))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Move-in date");
+    }
+
 }
