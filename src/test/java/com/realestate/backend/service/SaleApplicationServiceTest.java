@@ -256,4 +256,181 @@ class SaleApplicationServiceTest {
         assertThat(resp.status()).isEqualTo("CANCELLED");
         verify(applicationRepo).updateStatus(200L, "CANCELLED");
     }
+
+    @Test
+    @DisplayName("cancelMyApplication — aplikim i një tjetri → ForbiddenException")
+    void cancelMyApplication_notOwner_throwsForbidden() {
+        TenantContext.set(99L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing); // buyerId = 50L
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+
+        assertThatThrownBy(() -> saleApplicationService.cancelMyApplication(200L))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("përket");
+    }
+
+    @Test
+    @DisplayName("cancelMyApplication — jo PENDING → ConflictException")
+    void cancelMyApplication_notPending_throwsConflict() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        app.setStatus("APPROVED");
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+
+        assertThatThrownBy(() -> saleApplicationService.cancelMyApplication(200L))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("PENDING");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // updateStatus (admin/agent)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("updateStatus — PENDING → APPROVED sukses")
+    void updateStatus_pendingToApproved_success() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        SaleApplication approved = pendingApp(listing);
+        approved.setStatus("APPROVED");
+
+        when(applicationRepo.findById(200L))
+                .thenReturn(Optional.of(app))
+                .thenReturn(Optional.of(approved));
+        when(userRepo.findFullNameById(any())).thenReturn(Optional.of("Test User"));
+
+        SaleApplicationStatusRequest req = new SaleApplicationStatusRequest("APPROVED", null);
+        SaleApplicationAdminResponse resp = saleApplicationService.updateStatus(200L, req);
+
+        assertThat(resp.status()).isEqualTo("APPROVED");
+        verify(applicationRepo).updateStatus(200L, "APPROVED");
+    }
+
+    @Test
+    @DisplayName("updateStatus — PENDING → REJECTED me arsye")
+    void updateStatus_pendingToRejected_withReason() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        SaleApplication rejected = pendingApp(listing);
+        rejected.setStatus("REJECTED");
+        rejected.setRejectionReason("Dokumentet jo të plota");
+
+        when(applicationRepo.findById(200L))
+                .thenReturn(Optional.of(app))
+                .thenReturn(Optional.of(rejected));
+        when(userRepo.findFullNameById(any())).thenReturn(Optional.of("Test User"));
+
+        SaleApplicationStatusRequest req = new SaleApplicationStatusRequest(
+                "REJECTED", "Dokumentet jo të plota"
+        );
+        SaleApplicationAdminResponse resp = saleApplicationService.updateStatus(200L, req);
+
+        assertThat(resp.status()).isEqualTo("REJECTED");
+        verify(applicationRepo).updateStatusWithReason(200L, "REJECTED", "Dokumentet jo të plota");
+    }
+
+    @Test
+    @DisplayName("updateStatus — aplikim i REJECTED → ConflictException")
+    void updateStatus_alreadyRejected_throwsConflict() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        app.setStatus("REJECTED");
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+
+        SaleApplicationStatusRequest req = new SaleApplicationStatusRequest("APPROVED", null);
+
+        assertThatThrownBy(() -> saleApplicationService.updateStatus(200L, req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("nuk mund të ndryshohet");
+    }
+
+    @Test
+    @DisplayName("updateStatus — përpjekje për PENDING → BadRequestException")
+    void updateStatus_backToPending_throwsBadRequest() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        app.setStatus("APPROVED");
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+
+        SaleApplicationStatusRequest req = new SaleApplicationStatusRequest("PENDING", null);
+
+        assertThatThrownBy(() -> saleApplicationService.updateStatus(200L, req))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("PENDING");
+    }
+
+    @Test
+    @DisplayName("updateStatus — status i pavlefshëm → BadRequestException")
+    void updateStatus_invalidStatus_throwsBadRequest() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+
+        SaleApplicationStatusRequest req = new SaleApplicationStatusRequest("NONEXISTENT", null);
+
+        assertThatThrownBy(() -> saleApplicationService.updateStatus(200L, req))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Status i pavlefshëm");
+    }
+
+    @Test
+    @DisplayName("updateStatus — CLIENT → ForbiddenException")
+    void updateStatus_client_throwsForbidden() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        SaleApplicationStatusRequest req = new SaleApplicationStatusRequest("APPROVED", null);
+
+        assertThatThrownBy(() -> saleApplicationService.updateStatus(200L, req))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // getByListing, getByStatus, getById
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("getByListing — AGENT → kthehet faqja")
+    void getByListing_agent_returnsPage() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        Page<SaleApplication> page = new PageImpl<>(List.of(app));
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(applicationRepo.findByListing_IdOrderByCreatedAtDesc(100L, pageable)).thenReturn(page);
+        when(userRepo.findFullNameById(any())).thenReturn(Optional.of("Test User"));
+
+        Page<SaleApplicationAdminResponse> result = saleApplicationService.getByListing(100L, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
 }
