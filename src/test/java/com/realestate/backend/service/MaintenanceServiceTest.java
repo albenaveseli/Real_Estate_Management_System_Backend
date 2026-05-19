@@ -170,3 +170,137 @@ class MaintenanceServiceTest {
 
         assertThat(result.getContent().get(0).requestedBy()).isEqualTo(50L);
     }
+
+    @Test
+    @DisplayName("getAssignedToMe — agent → kthehet faqja me kërkesat e asinjuara")
+    void getAssignedToMe_agent_returnsPage() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = property();
+        MaintenanceRequest mr = openRequest(prop);
+        mr.setAssignedTo(10L);
+        Page<MaintenanceRequest> page = new PageImpl<>(List.of(mr));
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(maintenanceRepo.findByAssignedToOrderByCreatedAtDesc(10L, pageable))
+                .thenReturn(page);
+
+        Page<MaintenanceResponse> result = maintenanceService.getAssignedToMe(pageable);
+
+        assertThat(result.getContent().get(0).assignedTo()).isEqualTo(10L);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // create
+    // ═══════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("create — pa lease → krijohet kërkesa dhe njoftim dërguar agjentit")
+    void create_withoutLease_success() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = property();
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+
+        MaintenanceRequest saved = openRequest(prop);
+        when(maintenanceRepo.save(any())).thenReturn(saved);
+
+        MaintenanceCreateRequest req = new MaintenanceCreateRequest(
+                1L, null, "Çatia rrjedhë", "Ka lagështi",
+                MaintenanceCategory.PLUMBING, MaintenancePriority.HIGH, new BigDecimal("200")
+        );
+
+        MaintenanceResponse resp = maintenanceService.create(req);
+
+        assertThat(resp.id()).isEqualTo(300L);
+        assertThat(resp.status()).isEqualTo(MaintenanceStatus.OPEN);
+        verify(maintenanceRepo).save(any());
+        verify(notificationService).sendNotification(
+                eq(10L), anyString(), anyString(),
+                eq(NotificationType.WARNING), anyString(), eq(300L), anyString()
+        );
+    }
+
+    @Test
+    @DisplayName("create — me lease → krijohet kërkesa me kontratën e lidhur")
+    void create_withLease_success() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = property();
+        LeaseContract lease = new LeaseContract();
+        lease.setId(5L);
+
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+        when(leaseRepo.findById(5L)).thenReturn(Optional.of(lease));
+
+        MaintenanceRequest saved = openRequest(prop);
+        saved.setLease(lease);
+        when(maintenanceRepo.save(any())).thenReturn(saved);
+
+        MaintenanceCreateRequest req = new MaintenanceCreateRequest(
+                1L, 5L, "Ngrohja nuk funksionon", "Defekt",
+                MaintenanceCategory.HVAC, MaintenancePriority.MEDIUM, null
+        );
+
+        MaintenanceResponse resp = maintenanceService.create(req);
+
+        assertThat(resp.leaseId()).isEqualTo(5L);
+        verify(leaseRepo).findById(5L);
+    }
+
+    @Test
+    @DisplayName("create — prona nuk ekziston → ResourceNotFoundException")
+    void create_propertyNotFound_throws() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        when(propertyRepo.findByIdAndDeletedAtIsNull(999L)).thenReturn(Optional.empty());
+
+        MaintenanceCreateRequest req = new MaintenanceCreateRequest(
+                999L, null, "Title", "Desc", MaintenanceCategory.PLUMBING, null, null
+        );
+
+        assertThatThrownBy(() -> maintenanceService.create(req))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("999");
+    }
+
+    @Test
+    @DisplayName("create — lease nuk ekziston → ResourceNotFoundException")
+    void create_leaseNotFound_throws() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = property();
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+        when(leaseRepo.findById(999L)).thenReturn(Optional.empty());
+
+        MaintenanceCreateRequest req = new MaintenanceCreateRequest(
+                1L, 999L, "Title", "Desc", MaintenanceCategory.PLUMBING, null, null
+        );
+
+        assertThatThrownBy(() -> maintenanceService.create(req))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("999");
+    }
+
+    @Test
+    @DisplayName("create — priority null → vendoset MEDIUM si default")
+    void create_nullPriority_defaultsMedium() {
+        TenantContext.set(50L, 1L, "tenant_1", "CLIENT");
+
+        Property prop = property();
+        when(propertyRepo.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(prop));
+
+        // Kap argumentin e save() për të verifikuar priority-n
+        ArgumentCaptor<MaintenanceRequest> captor = ArgumentCaptor.forClass(MaintenanceRequest.class);
+        MaintenanceRequest saved = openRequest(prop);
+        saved.setPriority(MaintenancePriority.MEDIUM);
+        when(maintenanceRepo.save(captor.capture())).thenReturn(saved);
+
+        MaintenanceCreateRequest req = new MaintenanceCreateRequest(
+                1L, null, "Title", "Desc", MaintenanceCategory.ELECTRICAL, null, null
+        );
+
+        maintenanceService.create(req);
+
+        assertThat(captor.getValue().getPriority()).isEqualTo(MaintenancePriority.MEDIUM);
+    }
