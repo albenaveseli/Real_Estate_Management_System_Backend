@@ -433,4 +433,61 @@ class SaleApplicationServiceTest {
         assertThat(result.getTotalElements()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("getByStatus — status i vlefshëm → kthehet faqja")
+    void getByStatus_validStatus_returnsPage() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+        Page<SaleApplication> page = new PageImpl<>(List.of(app));
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(applicationRepo.findByStatusOrderByCreatedAtDesc("PENDING", pageable)).thenReturn(page);
+        when(userRepo.findFullNameById(any())).thenReturn(Optional.of("Test User"));
+
+        Page<SaleApplicationAdminResponse> result =
+                saleApplicationService.getByStatus("PENDING", pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("getByStatus — status i pavlefshëm → BadRequestException")
+    void getByStatus_invalidStatus_throwsBadRequest() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        assertThatThrownBy(() -> saleApplicationService.getByStatus("WRONG", PageRequest.of(0, 10)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Status i pavlefshëm");
+    }
+
+    @Test
+    @DisplayName("getById — AGENT → kthehet response")
+    void getById_agent_returnsResponse() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        Property prop = activeProperty();
+        SaleListing listing = activeListing(prop);
+        SaleApplication app = pendingApp(listing);
+
+        when(applicationRepo.findById(200L)).thenReturn(Optional.of(app));
+        when(userRepo.findFullNameById(any())).thenReturn(Optional.of("Test User"));
+
+        SaleApplicationAdminResponse resp = saleApplicationService.getById(200L);
+
+        assertThat(resp.id()).isEqualTo(200L);
+    }
+
+    @Test
+    @DisplayName("getById — aplikim nuk ekziston → ResourceNotFoundException")
+    void getById_notFound_throws() {
+        TenantContext.set(10L, 1L, "tenant_1", "AGENT");
+
+        when(applicationRepo.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> saleApplicationService.getById(999L))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
 }
