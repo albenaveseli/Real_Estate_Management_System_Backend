@@ -35,14 +35,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class RentalServiceTest {
 
-    @Mock
-    RentalListingRepository listingRepo;
-    @Mock
-    RentalApplicationRepository applicationRepo;
-    @Mock
-    PropertyRepository propertyRepo;
-    @Mock
-    NotificationService notificationService;
+    @Mock RentalListingRepository     listingRepo;
+    @Mock RentalApplicationRepository applicationRepo;
+    @Mock PropertyRepository          propertyRepo;
+    @Mock NotificationService         notificationService;
 
     RentalService rentalService;
 
@@ -416,8 +412,6 @@ class RentalServiceTest {
         RentalListing listing = activeListing(prop);
         listing.setAvailableFrom(LocalDate.now().plusDays(10));
         when(listingRepo.findByIdAndDeletedAtIsNull(100L)).thenReturn(Optional.of(listing));
-        when(applicationRepo.existsByListing_IdAndClientIdAndStatusIn(any(), any(), any()))
-                .thenReturn(false);
 
         RentalApplicationCreateRequest req = new RentalApplicationCreateRequest(
                 100L, null, null, LocalDate.now().plusDays(1)
