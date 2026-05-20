@@ -854,8 +854,7 @@ This eliminates repeated `ResponseEntity.ok(...)`, `PageRequest.of(...)`, and `H
 ---
 
 ## Caching — Redis
-
-Notification counts, and dashboard statistics 
+Dashboard statistics 
 are cached in Redis with a 10-minute TTL:
 
 User → GET /api/dashboard/stats → miss → aggregate DB queries → cache per tenant
