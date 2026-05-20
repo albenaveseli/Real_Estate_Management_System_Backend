@@ -10,6 +10,4 @@ import java.util.Optional;
 public interface ClientProfileRepository extends JpaRepository<ClientProfile, Long> {
 
     Optional<ClientProfile> findByUserId(Long userId);
-
-    boolean existsByUserId(Long userId);
 }

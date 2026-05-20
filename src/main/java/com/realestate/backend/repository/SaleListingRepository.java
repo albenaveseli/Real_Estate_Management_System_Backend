@@ -25,12 +25,6 @@ public interface SaleListingRepository extends JpaRepository<SaleListing, Long> 
 
     List<SaleListing> findByProperty_IdAndDeletedAtIsNull(Long propertyId);
 
-    // Filtrim sipas çmimit
-    Page<SaleListing> findByPriceBetweenAndStatusAndDeletedAtIsNull(
-            BigDecimal minPrice, BigDecimal maxPrice,
-            SaleStatus status, Pageable pageable);
-
-    // Soft delete
     @Modifying
     @Query("""
         UPDATE SaleListing sl
@@ -39,7 +33,6 @@ public interface SaleListingRepository extends JpaRepository<SaleListing, Long> 
     """)
     void softDelete(@Param("id") Long id);
 
-    // Ndrysho statusin
     @Modifying
     @Query("""
         UPDATE SaleListing sl

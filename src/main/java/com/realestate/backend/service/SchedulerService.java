@@ -2,6 +2,7 @@ package com.realestate.backend.service;
 
 import com.realestate.backend.entity.enums.LeadStatus;
 import com.realestate.backend.entity.enums.NotificationType;
+import com.realestate.backend.entity.tenant.TenantSchemaRegistry;
 import com.realestate.backend.repository.LeadRequestRepository;
 import com.realestate.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,8 +11,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import com.realestate.backend.multitenancy.TenantContext;
 import com.realestate.backend.repository.SchemaRegistryRepository;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.scheduling.annotation.Scheduled;
+
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -20,15 +22,14 @@ public class SchedulerService {
     private final PaymentService           paymentService;
     private final LeaseContractService     leaseContractService;
     private final SchemaRegistryRepository schemaRegistryRepo;
-    private final LeadRequestRepository leadRequestRepository;
+    private final LeadRequestRepository    leadRequestRepository;
     private final NotificationService      notificationService;
-    private final UserRepository userRepository;
+    private final UserRepository           userRepository;
+    private final DashboardService         dashboardService;
 
     @Scheduled(cron = "0 0 0 * * *")
     public void markOverduePayments() {
-        var schemas = activeSchemas();
-
-        for (var schema : schemas) {
+        for (var schema : activeSchemas()) {
             try {
                 TenantContext.set(null, null, schema.getSchemaName(), "SYSTEM");
                 int count = paymentService.markOverduePayments();
@@ -38,11 +39,12 @@ public class SchedulerService {
                             schema.getTenant().getId(),
                             schema.getSchemaName(),
                             "⏰ Overdue Payments Detected",
-                            count + " payment(s) marked as overdue. Review required.",
+                            count + " payment(s) marked as overdue.",
                             NotificationType.WARNING,
                             "payment", null,
                             "/admin/payments"
                     );
+                    dashboardService.evictAll();
                 }
 
                 log.info("[Scheduler] Schema={} — {} payments marked OVERDUE",
@@ -63,7 +65,6 @@ public class SchedulerService {
             try {
                 TenantContext.set(null, null, schema.getSchemaName(), "SYSTEM");
                 var expiring = leaseContractService.getExpiringSoon();
-
 
                 if (!expiring.isEmpty()) {
                     notifyTenantAdmins(
@@ -87,7 +88,6 @@ public class SchedulerService {
             }
         }
     }
-
 
     @Scheduled(fixedDelay = 21600000)
     public void logSystemStats() {
@@ -122,7 +122,6 @@ public class SchedulerService {
                 var  expiring        = leaseContractService.getExpiringSoon();
                 long unassignedLeads = leadRequestRepository.countByStatus(LeadStatus.NEW);
 
-
                 String msg = String.format(
                         "Weekly Report: %d overdue payments · %d expiring contracts · %d unassigned leads",
                         overdueCount, expiring.size(), unassignedLeads
@@ -138,7 +137,10 @@ public class SchedulerService {
                         "/admin/background-jobs"
                 );
 
-                log.info("[WeeklyReport] Schema={} — {}", schema.getSchemaName(), msg);
+                if (overdueCount > 0) dashboardService.evictAll(); // ← SHTO
+
+                log.info("[WeeklyReport] Schema={} — {}",
+                        schema.getSchemaName(), msg);
 
             } catch (Exception e) {
                 log.error("[WeeklyReport] Error for schema={}: {}",
@@ -148,15 +150,15 @@ public class SchedulerService {
             }
         }
     }
-    // ── Helper ─────────────────────────────────────────────────
-    private void notifyTenantAdmins(Long tenantId,
-                                    String schemaName,
+
+
+    private void notifyTenantAdmins(Long tenantId, String schemaName,
                                     String title, String message,
                                     NotificationType type,
                                     String entityType, Long entityId,
                                     String actionUrl) {
         try {
-            userRepository.findAllByTenantId(tenantId).stream() //
+            userRepository.findAllByTenantId(tenantId).stream()
                     .filter(u -> u.getRole().name().equals("ADMIN"))
                     .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
                     .filter(u -> u.getDeletedAt() == null)
@@ -171,24 +173,11 @@ public class SchedulerService {
                     schemaName, e.getMessage());
         }
     }
-    private java.util.List<com.realestate.backend.entity.tenant.TenantSchemaRegistry> activeSchemas() {
+
+    private List<TenantSchemaRegistry> activeSchemas() {
         return schemaRegistryRepo.findAll()
                 .stream()
                 .filter(r -> Boolean.TRUE.equals(r.getIsProvisioned()))
                 .toList();
-    }
-    private void generateWeeklyReport(String schemaName) {
-        long overdueCount   = paymentService.markOverduePayments();
-        var  expiring       = leaseContractService.getExpiringSoon();
-        long unassignedLeads = leadRequestRepository.countByStatus(
-                com.realestate.backend.entity.enums.LeadStatus.NEW);
-
-        log.info("""
-        [WeeklyReport] Schema={}
-        ├─ Overdue payments:      {}
-        ├─ Expiring contracts:    {}
-        └─ Unassigned leads (NEW): {}
-        """,
-                schemaName, overdueCount, expiring.size(), unassignedLeads);
     }
 }

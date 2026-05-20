@@ -43,13 +43,12 @@ public class LeaseContractService {
     private final UserRepository          userRepo;
     private final LeadRequestRepository   leadRequestRepo;
     private final NotificationService notificationService;
+    private final DashboardService dashboardService;
 
     private static final List<String> VALID_CURRENCIES = List.of("EUR","USD","GBP","CHF","ALL","MKD");
 
-    // Komisioni = 3% e 1 muaj qiraje
     private static final BigDecimal COMMISSION_RATE = new BigDecimal("0.03");
 
-    // ── Listim ───────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public Page<LeaseContractSummary> getAll(Pageable pageable) {
         return contractRepo.findAll(
@@ -98,7 +97,6 @@ public class LeaseContractService {
                 .stream().map(this::toSummary).toList();
     }
 
-    // ── Krijo ────────────────────────────────────────────────────
     @Transactional
     public LeaseContractResponse create(LeaseContractCreateRequest req) {
         assertIsAdminOrAgent();
@@ -149,6 +147,7 @@ public class LeaseContractService {
                 "lease_contract", saved.getId(),
                 "/client/mycontracts"
         );
+        dashboardService.evict();
         log.info("LeaseContract created: id={}, property={}, client={}",
                 saved.getId(), req.propertyId(), req.clientId());
         return toResponse(saved);
@@ -171,18 +170,17 @@ public class LeaseContractService {
         if (req.deposit()         != null) contract.setDeposit(req.deposit());
         if (req.currency()        != null) contract.setCurrency(req.currency().toUpperCase());
         if (req.contractFileUrl() != null) contract.setContractFileUrl(req.contractFileUrl());
-
-        return toResponse(contractRepo.save(contract));
+        LeaseContract updated=contractRepo.save(contract);
+        dashboardService.evict();
+        return toResponse(updated);
     }
 
-    // ── Status ───────────────────────────────────────────────────
     @Transactional
     public LeaseContractResponse updateStatus(Long id, LeaseStatusRequest req) {
         assertIsAdminOrAgent();
         LeaseContract contract = findContract(id);
         contractRepo.updateStatus(id, req.status());
 
-        // Kur kontrata aktivizohet → krijo pagesat e komisionit
         if (req.status() == LeaseStatus.ACTIVE
                 && contract.getStatus() == LeaseStatus.PENDING_SIGNATURE) {
             LeaseContract fresh = findContract(id);
@@ -206,7 +204,9 @@ public class LeaseContractService {
         }
 
         log.info("LeaseContract id={} status → {}", id, req.status());
-        return toResponse(findContract(id));
+        LeaseContract updatedStatus=findContract(id);
+        dashboardService.evict();
+        return toResponse(updatedStatus);
     }
 
     @Transactional(readOnly = true)
@@ -236,10 +236,8 @@ public class LeaseContractService {
                 .map(Payment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // ownerAmount i mbetur = 97% - çfarë është paguar tashmë si DEPOSIT
         BigDecimal remainingOwnerAmount = ownerAmount.subtract(alreadyPaid);
 
-        // Sigurohu që nuk shkojmë negativ
         if (remainingOwnerAmount.compareTo(BigDecimal.ZERO) < 0) {
             remainingOwnerAmount = BigDecimal.ZERO;
         }
@@ -247,7 +245,6 @@ public class LeaseContractService {
         log.info("LeaseContract={} rent={} alreadyPaid={} remainingOwner={}",
                 contract.getId(), rent, alreadyPaid, remainingOwnerAmount);
 
-        // Kontrollo nëse prona erdhi nga lead me status DONE
         Long ownerClientId = leadRequestRepo
                 .findByPropertyIdOrdered(contract.getProperty().getId())
                 .stream()
@@ -266,24 +263,20 @@ public class LeaseContractService {
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Pronari nuk u gjet: " + ownerClientId));
 
-            // RENT — vetëm shuma e mbetur pas deposit-eve
             if (remainingOwnerAmount.compareTo(BigDecimal.ZERO) > 0) {
                 savePayment(contract, remainingOwnerAmount, currency, PaymentType.RENT, owner);
             }
 
-            // COMMISSION — 50% → kompania
             savePayment(contract,
                     commissionTotal.multiply(new BigDecimal("0.50")),
                     currency, PaymentType.COMMISSION, null);
 
-            // AGENT_COMMISSION — 40% → agjenti
             userRepo.findById(contract.getAgentId()).ifPresent(agent ->
                     savePayment(contract,
                             commissionTotal.multiply(new BigDecimal("0.40")),
                             currency, PaymentType.AGENT_COMMISSION, agent)
             );
 
-            // CLIENT_BONUS — 10% → pronari
             savePayment(contract,
                     commissionTotal.multiply(new BigDecimal("0.10")),
                     currency, PaymentType.CLIENT_BONUS, owner);
@@ -296,21 +289,17 @@ public class LeaseContractService {
                     alreadyPaid);
 
         } else {
-            // ══════════════════════════════════════════════════
 
             log.info("Rental Skenari 2 — pronë e kompanisë, contract={}", contract.getId());
 
-            // RENT — vetëm shuma e mbetur pas deposit-eve → kompania
             if (remainingOwnerAmount.compareTo(BigDecimal.ZERO) > 0) {
                 savePayment(contract, remainingOwnerAmount, currency, PaymentType.RENT, null);
             }
 
-            // COMMISSION — 60% → kompania
             savePayment(contract,
                     commissionTotal.multiply(new BigDecimal("0.60")),
                     currency, PaymentType.COMMISSION, null);
 
-            // AGENT_COMMISSION — 40% → agjenti
             userRepo.findById(contract.getAgentId()).ifPresent(agent ->
                     savePayment(contract,
                             commissionTotal.multiply(new BigDecimal("0.40")),
@@ -338,10 +327,6 @@ public class LeaseContractService {
                 .build();
         paymentRepo.save(payment);
     }
-
-    // ════════════════════════════════════════════════════════════
-    // VALIDATION
-    // ════════════════════════════════════════════════════════════
 
     private void validateCreate(LeaseContractCreateRequest req) {
         if (req.propertyId() == null || req.propertyId() <= 0)
@@ -391,9 +376,6 @@ public class LeaseContractService {
             throw new IllegalArgumentException("Currency e pavlefshme: " + req.currency());
     }
 
-    // ════════════════════════════════════════════════════════════
-    // HELPERS & MAPPERS
-    // ════════════════════════════════════════════════════════════
 
     private LeaseContract findContract(Long id) {
         return contractRepo.findById(id)

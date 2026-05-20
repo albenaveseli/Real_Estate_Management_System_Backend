@@ -18,7 +18,6 @@ public class DashboardService {
     private final PropertyRepository     propertyRepo;
     private final LeaseContractRepository contractRepo;
     private final PaymentRepository      paymentRepo;
-    private final UserRepository         userRepo;
     private final LeadRequestRepository  leadRepo;
 
     @Cacheable(value = "dashboard-stats",
@@ -44,6 +43,12 @@ public class DashboardService {
         );
     }
 
-    @CacheEvict(value = "dashboard-stats", allEntries = true)
+    @CacheEvict(
+            value = "dashboard-stats",
+            key = "T(com.realestate.backend.multitenancy.TenantContext).getTenantId()"
+    )
     public void evict() {}
+
+    @CacheEvict(value = "dashboard-stats", allEntries = true)
+    public void evictAll() {}
 }

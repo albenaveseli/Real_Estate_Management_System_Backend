@@ -18,11 +18,9 @@ public interface RentalListingRepository extends JpaRepository<RentalListing, Lo
 
     Page<RentalListing> findAllByDeletedAtIsNull(Pageable pageable);
 
-    // Listim aktive sipas pronës
     List<RentalListing> findByProperty_IdAndStatusAndDeletedAtIsNull(
             Long propertyId, String status);
 
-    // Kontrollo overlap listing për të njëjtën pronë
     @Query("""
     SELECT COUNT(rl) > 0 FROM RentalListing rl
     WHERE rl.property.id = :propertyId
@@ -36,7 +34,6 @@ public interface RentalListingRepository extends JpaRepository<RentalListing, Lo
             @Param("availableFrom") java.time.LocalDate availableFrom,
             @Param("availableUntil") java.time.LocalDate availableUntil
     );
-    // Soft delete
     @Modifying
     @Query("""
         UPDATE RentalListing rl
@@ -45,7 +42,6 @@ public interface RentalListingRepository extends JpaRepository<RentalListing, Lo
     """)
     void softDelete(@Param("id") Long id);
 
-    // Ndrysho statusin
     @Modifying
     @Query("""
         UPDATE RentalListing rl

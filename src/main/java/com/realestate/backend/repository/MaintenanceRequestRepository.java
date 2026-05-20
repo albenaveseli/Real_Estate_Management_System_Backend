@@ -16,18 +16,12 @@ public interface MaintenanceRequestRepository extends JpaRepository<MaintenanceR
 
     Page<MaintenanceRequest> findByStatusOrderByCreatedAtDesc(MaintenanceStatus status, Pageable pageable);
 
-    Page<MaintenanceRequest> findByPriorityAndStatusOrderByCreatedAtDesc(
-            MaintenancePriority priority, MaintenanceStatus status, Pageable pageable);
-
     List<MaintenanceRequest> findByProperty_IdOrderByCreatedAtDesc(Long propertyId);
-
-    List<MaintenanceRequest> findByLease_IdOrderByCreatedAtDesc(Long leaseId);
 
     Page<MaintenanceRequest> findByRequestedByOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
     Page<MaintenanceRequest> findByAssignedToOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
-    // Kërkesat urgjente të hapura
     @Query("""
         SELECT mr FROM MaintenanceRequest mr
         WHERE mr.priority = com.realestate.backend.entity.enums.MaintenancePriority.URGENT
@@ -36,7 +30,6 @@ public interface MaintenanceRequestRepository extends JpaRepository<MaintenanceR
     """)
     List<MaintenanceRequest> findUrgentOpen();
 
-    // Ndrysho statusin
     @Modifying
     @Query("""
         UPDATE MaintenanceRequest mr

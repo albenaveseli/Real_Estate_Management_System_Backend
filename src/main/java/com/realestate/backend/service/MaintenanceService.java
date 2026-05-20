@@ -32,7 +32,6 @@ public class MaintenanceService {
     private final LeaseContractRepository      leaseRepo;
     private final NotificationService notificationService;
 
-    // ── Listim sipas statusit ─────────────────────────────────
     @Transactional(readOnly = true)
     public Page<MaintenanceResponse> getAll(MaintenanceStatus status, Pageable pageable) {
         assertIsAdminOrAgent();
@@ -40,13 +39,11 @@ public class MaintenanceService {
                 .map(this::toResponse);
     }
 
-    // ── Detaj ─────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public MaintenanceResponse getById(Long id) {
         return toResponse(findRequest(id));
     }
 
-    // ── Sipas pronës ──────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<MaintenanceResponse> getByProperty(Long propertyId) {
         assertIsAdminOrAgent();
@@ -54,28 +51,24 @@ public class MaintenanceService {
                 .stream().map(this::toResponse).toList();
     }
 
-    // ── Kërkesat e mia (klient) ───────────────────────────────
     @Transactional(readOnly = true)
     public Page<MaintenanceResponse> getMyRequests(Pageable pageable) {
         return maintenanceRepo.findByRequestedByOrderByCreatedAtDesc(TenantContext.getUserId(), pageable)
                 .map(this::toResponse);
     }
 
-    // ── Të asinjuara tek unë ──────────────────────────────────
     @Transactional(readOnly = true)
     public Page<MaintenanceResponse> getAssignedToMe(Pageable pageable) {
         return maintenanceRepo.findByAssignedToOrderByCreatedAtDesc(TenantContext.getUserId(), pageable)
                 .map(this::toResponse);
     }
 
-    // ── Kërkesat urgjente ─────────────────────────────────────
     @Transactional(readOnly = true)
     public List<MaintenanceResponse> getUrgentOpen() {
         assertIsAdminOrAgent();
         return maintenanceRepo.findUrgentOpen().stream().map(this::toResponse).toList();
     }
 
-    // ── Krijo kërkesë ─────────────────────────────────────────
     @Transactional
     public MaintenanceResponse create(MaintenanceCreateRequest req) {
         Property property = propertyRepo.findByIdAndDeletedAtIsNull(req.propertyId())
@@ -115,7 +108,6 @@ public class MaintenanceService {
         return toResponse(saved);
     }
 
-    // ── Ndrysho ───────────────────────────────────────────────
     @Transactional
     public MaintenanceResponse update(Long id, MaintenanceUpdateRequest req) {
         assertIsAdminOrAgent();
@@ -131,7 +123,6 @@ public class MaintenanceService {
         return toResponse(maintenanceRepo.save(mr));
     }
 
-    // ── Ndrysho statusin ──────────────────────────────────────
     @Transactional
     public MaintenanceResponse updateStatus(Long id, MaintenanceStatusRequest req) {
         assertIsAdminOrAgent();
@@ -179,7 +170,6 @@ public class MaintenanceService {
 
     }
 
-    // ── Helpers ───────────────────────────────────────────────
 
     private MaintenanceRequest findRequest(Long id) {
         return maintenanceRepo.findById(id)
@@ -192,7 +182,6 @@ public class MaintenanceService {
         }
     }
 
-    // ── Mapper ────────────────────────────────────────────────
 
     private MaintenanceResponse toResponse(MaintenanceRequest mr) {
         return new MaintenanceResponse(

@@ -13,9 +13,6 @@ public interface SalePaymentRepository extends JpaRepository<SalePayment, Long> 
 
     List<SalePayment> findByContract_IdOrderByCreatedAtAsc(Long contractId);
 
-    List<SalePayment> findByContract_IdAndStatus(Long contractId, String status);
-
-    // Totali i pagesave PAID për kontratën
     @Query("""
         SELECT COALESCE(SUM(sp.amount), 0)
         FROM SalePayment sp
@@ -24,7 +21,6 @@ public interface SalePaymentRepository extends JpaRepository<SalePayment, Long> 
     """)
     BigDecimal totalPaidByContract(@Param("contractId") Long contractId);
 
-    // Ndrysho statusin
     @Modifying
     @Query("""
         UPDATE SalePayment sp

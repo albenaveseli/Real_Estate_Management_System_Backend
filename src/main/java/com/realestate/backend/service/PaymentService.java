@@ -31,10 +31,9 @@ public class PaymentService {
     private final PaymentRepository       paymentRepo;
     private final LeaseContractRepository contractRepo;
     private final UserRepository          userRepo;
-
+    private final DashboardService dashboardService;
     private static final List<String> VALID_CURRENCIES = List.of("EUR","USD","GBP","CHF","ALL","MKD");
 
-    // ── Queries ───────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<PaymentResponse> getByContract(Long contractId) {
         if (contractId == null || contractId <= 0)
@@ -62,7 +61,6 @@ public class PaymentService {
         return toResponse(findPayment(id));
     }
 
-    // ── Create ────────────────────────────────────────────────────
     @Transactional
     public PaymentResponse create(PaymentCreateRequest req) {
         assertIsAdminOrAgent();
@@ -92,13 +90,13 @@ public class PaymentService {
                 .build();
 
         Payment saved = paymentRepo.save(payment);
+        dashboardService.evict();
         log.info("Payment created: id={}, contract={}, amount={}, recipient={}",
                 saved.getId(), req.contractId(), req.amount(),
                 recipient != null ? recipient.getId() : "COMPANY");
         return toResponse(saved);
     }
 
-    // ── Mark as paid ──────────────────────────────────────────────
     @Transactional
     public PaymentResponse markAsPaid(Long id, PaymentMarkPaidRequest req) {
         assertIsAdminOrAgent();
@@ -119,31 +117,31 @@ public class PaymentService {
         if (req.transactionRef() != null) payment.setTransactionRef(req.transactionRef());
 
         Payment saved = paymentRepo.save(payment);
+        dashboardService.evict();
         log.info("Payment id={} marked as PAID, paidDate={}", id, paidDate);
         return toResponse(saved);
     }
 
-    // ── Update status ─────────────────────────────────────────────
     @Transactional
     public PaymentResponse updateStatus(Long id, PaymentStatusRequest req) {
         assertIsAdminOrAgent();
         if (req.status() == null) throw new IllegalArgumentException("Status i detyrueshëm");
         Payment payment = findPayment(id);
         payment.setStatus(req.status());
+        dashboardService.evict();
         return toResponse(paymentRepo.save(payment));
     }
 
-    // ── Mark overdue (background job) ─────────────────────────────
     @Transactional
     public int markOverduePayments() {
         List<Payment> overdue = paymentRepo.findOverduePayments(LocalDate.now());
         overdue.forEach(p -> p.setStatus(PaymentStatus.OVERDUE));
         paymentRepo.saveAll(overdue);
+        dashboardService.evict();
         log.info("{} payments marked as OVERDUE", overdue.size());
         return overdue.size();
     }
 
-    // ── Summary ───────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public PaymentSummaryResponse getSummaryByContract(Long contractId) {
         List<PaymentResponse> payments = paymentRepo
@@ -169,10 +167,6 @@ public class PaymentService {
         return paymentRepo.totalRevenue();
     }
 
-    // ════════════════════════════════════════════════════════════
-    // VALIDATION
-    // ════════════════════════════════════════════════════════════
-
     private void validateCreate(PaymentCreateRequest req) {
         if (req.contractId() == null || req.contractId() <= 0)
             throw new IllegalArgumentException("contractId i detyrueshëm");
@@ -197,10 +191,6 @@ public class PaymentService {
             throw new IllegalArgumentException("paymentMethod max 50 karaktere");
     }
 
-    // ════════════════════════════════════════════════════════════
-    // HELPERS & MAPPERS
-    // ════════════════════════════════════════════════════════════
-
     private Payment findPayment(Long id) {
         return paymentRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Pagesa nuk u gjet: " + id));
@@ -211,16 +201,15 @@ public class PaymentService {
             throw new ForbiddenException("Vetëm ADMIN ose AGENT mund të kryejë këtë veprim");
     }
 
-    // ── Mapper — tani me recipient_id, recipient_name, recipient_type ──
     private PaymentResponse toResponse(Payment p) {
         Long   recipientId   = null;
         String recipientName = null;
-        String recipientType = "COMPANY"; // default kur NULL — njësoj si Sales
+        String recipientType = "COMPANY";
 
         if (p.getRecipient() != null) {
             recipientId   = p.getRecipient().getId();
             recipientName = p.getRecipient().getFullName();
-            recipientType = p.getRecipient().getRole().name(); // "AGENT" ose "CLIENT"
+            recipientType = p.getRecipient().getRole().name();
         }
 
         return new PaymentResponse(

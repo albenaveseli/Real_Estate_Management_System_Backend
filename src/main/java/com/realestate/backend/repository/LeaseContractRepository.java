@@ -15,13 +15,10 @@ import java.util.Optional;
 @Repository
 public interface LeaseContractRepository extends JpaRepository<LeaseContract, Long> {
 
-    // Kontratat e klientit
     Page<LeaseContract> findByClientIdOrderByCreatedAtDesc(Long clientId, Pageable pageable);
 
-    // Kontratat e agjentit
     Page<LeaseContract> findByAgentIdOrderByCreatedAtDesc(Long agentId, Pageable pageable);
 
-    // Kontrollo overlap kontrate per te njejten pronë
     @Query("""
     SELECT COUNT(lc) > 0 FROM LeaseContract lc
     WHERE lc.property.id = :propertyId
@@ -37,7 +34,7 @@ public interface LeaseContractRepository extends JpaRepository<LeaseContract, Lo
             @Param("startDate")  java.time.LocalDate startDate,
             @Param("endDate")    java.time.LocalDate endDate
     );
-    // Kontratat qe skadojne se shpejti (per notifikime)
+
     @Query("""
         SELECT lc FROM LeaseContract lc
         WHERE lc.status = 'ACTIVE'
@@ -50,7 +47,6 @@ public interface LeaseContractRepository extends JpaRepository<LeaseContract, Lo
     );
 
 
-    // Ndrysho statusin
     @Modifying
     @Query("""
         UPDATE LeaseContract lc
@@ -60,9 +56,7 @@ public interface LeaseContractRepository extends JpaRepository<LeaseContract, Lo
     """)
     void updateStatus(@Param("id") Long id, @Param("status") LeaseStatus status);
 
-    // Numero kontratat aktive
     long countByStatus(LeaseStatus status);
 
-    // Kontrata sipas prones
     List<LeaseContract> findByProperty_IdOrderByCreatedAtDesc(Long propertyId);
 }

@@ -12,13 +12,10 @@ import java.util.Optional;
 @Repository
 public interface SavedPropertyRepository extends JpaRepository<SavedProperty, Long> {
 
-    // Të gjitha pronat e ruajtura nga një user
     Page<SavedProperty> findByUserIdOrderBySavedAtDesc(Long userId, Pageable pageable);
 
-    // A e ka ruajtur ky user këtë pronë?
     boolean existsByUserIdAndProperty_Id(Long userId, Long propertyId);
 
-    // Fshi me userId + propertyId
     @Modifying
     @Query("""
         DELETE FROM SavedProperty s

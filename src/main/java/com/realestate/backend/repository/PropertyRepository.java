@@ -22,7 +22,6 @@ public interface PropertyRepository
         extends JpaRepository<Property, Long>,
         JpaSpecificationExecutor<Property> {
 
-
     Optional<Property> findByIdAndDeletedAtIsNull(Long id);
 
     Page<Property> findAllByDeletedAtIsNull(Pageable pageable);
@@ -33,7 +32,6 @@ public interface PropertyRepository
 
     Page<Property> findByAgentIdAndDeletedAtIsNull(
             Long agentId, Pageable pageable);
-
 
     @Query(
             value = """

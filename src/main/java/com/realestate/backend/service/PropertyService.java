@@ -27,16 +27,15 @@ public class PropertyService {
 
     private final PropertyRepository             propertyRepository;
     private final PropertyPriceHistoryRepository priceHistoryRepository;
+    private final DashboardService dashboardService;
 
     private static final List<String> VALID_CURRENCIES = List.of("EUR","USD","GBP","CHF","ALL","MKD");
 
-    // ── GET ALL ──────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public Page<PropertySummaryResponse> getAll(Pageable pageable) {
         return propertyRepository.findAllByDeletedAtIsNull(pageable).map(this::toSummary);
     }
 
-    // ── GET BY ID ────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public PropertyResponse getById(Long id) {
         Property p = findActive(id);
@@ -44,7 +43,6 @@ public class PropertyService {
         return toResponse(p);
     }
 
-    // ── CREATE ───────────────────────────────────────────────────
     @Transactional
     public PropertyResponse create(PropertyCreateRequest req) {
         validateCreate(req);
@@ -79,11 +77,11 @@ public class PropertyService {
         }
 
         Property saved = propertyRepository.save(property);
+        dashboardService.evict();
         log.info("Property created: id={}, tenant={}", saved.getId(), TenantContext.getTenantId());
         return toResponse(saved);
     }
 
-    // ── UPDATE ───────────────────────────────────────────────────
     @Transactional
     public PropertyResponse update(Long id, PropertyUpdateRequest req) {
         Property property = findActive(id);
@@ -120,34 +118,33 @@ public class PropertyService {
                     )
             );
         }
-
-        return toResponse(propertyRepository.save(property));
+        Property updated=propertyRepository.save(property);
+        dashboardService.evict();
+        return toResponse(updated);
     }
 
-    // ── DELETE ───────────────────────────────────────────────────
     @Transactional
     public void delete(Long id) {
         findActive(id);
         propertyRepository.softDelete(id);
+        dashboardService.evict();
         log.info("Property soft-deleted: id={}", id);
     }
 
-    // ── UPDATE STATUS ────────────────────────────────────────────
     @Transactional
     public PropertyResponse updateStatus(Long id, PropertyStatusRequest req) {
         findActive(id);
         propertyRepository.updateStatus(id, req.status());
+        dashboardService.evict();
         return toResponse(findActive(id));
     }
 
-    // ── FEATURED ─────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<PropertySummaryResponse> getFeatured() {
         return propertyRepository.findByIsFeaturedTrueAndDeletedAtIsNull()
                 .stream().map(this::toSummary).toList();
     }
 
-    // ── SEARCH ───────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public Page<PropertySummaryResponse> search(String keyword, Pageable pageable) {
         if (keyword == null || keyword.isBlank())
@@ -157,7 +154,6 @@ public class PropertyService {
         return propertyRepository.fullTextSearch(keyword, pageable).map(this::toSummary);
     }
 
-    // ── FILTER ───────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public Page<PropertySummaryResponse> filter(PropertyFilterRequest req, Pageable pageable) {
         validateFilter(req);
@@ -174,7 +170,6 @@ public class PropertyService {
                 .map(this::toSummary);
     }
 
-    // ── PRICE HISTORY ────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<PriceHistoryResponse> getPriceHistory(Long propertyId) {
         findActive(propertyId);
@@ -186,7 +181,6 @@ public class PropertyService {
                 .toList();
     }
 
-    // ── BY AGENT ─────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public Page<PropertySummaryResponse> getByAgent(Long agentId, Pageable pageable) {
         if (agentId == null || agentId <= 0)
@@ -195,7 +189,6 @@ public class PropertyService {
                 .map(this::toSummary);
     }
 
-    // ── Validation ───────────────────────────────────────────────
     private void validateCreate(PropertyCreateRequest req) {
         if (req.title() == null || req.title().isBlank())
             throw new IllegalArgumentException("Titulli është i detyrueshëm");
@@ -297,7 +290,6 @@ public class PropertyService {
             throw new IllegalArgumentException("minArea >= 0");
     }
 
-    // ── Helpers ──────────────────────────────────────────────────
     private Property findActive(Long id) {
         return propertyRepository.findByIdAndDeletedAtIsNull(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Prona nuk u gjet: " + id));
@@ -335,7 +327,6 @@ public class PropertyService {
                 .build();
     }
 
-    // ── Mappers ──────────────────────────────────────────────────
     private PropertyResponse toResponse(Property p) {
         AddressResponse addr = p.getAddress() == null ? null : new AddressResponse(
                 p.getAddress().getId(), p.getAddress().getStreet(),
