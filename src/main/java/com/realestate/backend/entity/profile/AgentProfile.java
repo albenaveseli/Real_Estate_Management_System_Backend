@@ -18,7 +18,6 @@ public class AgentProfile {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // FK cross-schema: public.users — UNIQUE (1 profil per user)
     @Column(name = "user_id", unique = true, nullable = false)
     private Long userId;
 

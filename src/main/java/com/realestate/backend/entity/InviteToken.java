@@ -47,7 +47,6 @@ public class InviteToken {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
-    // ── Helper ───────────────────────────────────────────────
     public boolean isValid() {
         return !used && LocalDateTime.now().isBefore(expiresAt);
     }

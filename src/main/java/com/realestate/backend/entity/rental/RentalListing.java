@@ -34,7 +34,6 @@ public class RentalListing {
     @JoinColumn(name = "property_id", nullable = false)
     private Property property;
 
-    // FK cross-schema: public.users
     @Column(name = "agent_id")
     private Long agentId;
 
@@ -60,7 +59,6 @@ public class RentalListing {
     @Column(precision = 12, scale = 2)
     private BigDecimal deposit;
 
-    // DAILY | WEEKLY | MONTHLY | YEARLY
     @Column(name = "price_period", length = 20)
     @Builder.Default
     private String pricePeriod = "MONTHLY";
@@ -69,7 +67,6 @@ public class RentalListing {
     @Builder.Default
     private Integer minLeaseMonths = 12;
 
-    // ACTIVE | INACTIVE | EXPIRED | RENTED
     @Column(length = 20)
     @Builder.Default
     private String status = "ACTIVE";

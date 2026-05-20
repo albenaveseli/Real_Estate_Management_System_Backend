@@ -11,8 +11,6 @@ import java.time.LocalDateTime;
 
 public class RentalDtos {
 
-    // ── RENTAL LISTING CREATE ─────────────────────────────────
-
     public record RentalListingCreateRequest(
 
             @NotNull(message = "property_id është i detyrueshëm")
@@ -43,8 +41,6 @@ public class RentalDtos {
             Integer minLeaseMonths
     ) {}
 
-    // ── RENTAL LISTING UPDATE ─────────────────────────────────
-
     public record RentalListingUpdateRequest(
             String title,
             String description,
@@ -57,8 +53,6 @@ public class RentalDtos {
             @JsonProperty("min_lease_months") Integer minLeaseMonths,
             @Schema(allowableValues = {"ACTIVE","INACTIVE","EXPIRED","RENTED"}) String status
     ) {}
-
-    // ── RENTAL LISTING RESPONSE ───────────────────────────────
 
     public record RentalListingResponse(
             Long id,
@@ -78,7 +72,6 @@ public class RentalDtos {
             @JsonProperty("updated_at")      LocalDateTime updatedAt
     ) {}
 
-    // ── RENTAL APPLICATION CREATE ─────────────────────────────
 
     public record RentalApplicationCreateRequest(
 
@@ -95,8 +88,6 @@ public class RentalDtos {
             LocalDate moveInDate
     ) {}
 
-    // ── RENTAL APPLICATION REVIEW ─────────────────────────────
-
     public record RentalApplicationReviewRequest(
 
             @NotNull(message = "Statusi është i detyrueshëm")
@@ -106,9 +97,6 @@ public class RentalDtos {
             @JsonProperty("rejection_reason")
             String rejectionReason
     ) {}
-
-    // ── RENTAL APPLICATION RESPONSE ───────────────────────────
-
     public record RentalApplicationResponse(
             Long id,
             @JsonProperty("listing_id")        Long listingId,

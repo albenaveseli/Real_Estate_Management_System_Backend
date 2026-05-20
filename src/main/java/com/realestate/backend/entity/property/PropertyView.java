@@ -30,7 +30,6 @@ public class PropertyView {
     @JoinColumn(name = "property_id", nullable = false)
     private Property property;
 
-    // FK cross-schema: public.users — nullable (vizitor anonim)
     @Column(name = "user_id")
     private Long userId;
 

@@ -54,7 +54,6 @@ public class RefreshToken {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // ----------------------------------------------------
     public boolean isExpired() {
         return expiresAt.isBefore(LocalDateTime.now());
     }

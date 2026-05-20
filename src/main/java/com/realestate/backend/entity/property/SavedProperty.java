@@ -31,7 +31,6 @@ public class SavedProperty {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // FK cross-schema: public.users
     @Column(name = "user_id", nullable = false)
     private Long userId;
 

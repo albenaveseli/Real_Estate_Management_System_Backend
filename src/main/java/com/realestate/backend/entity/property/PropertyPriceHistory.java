@@ -41,7 +41,6 @@ public class PropertyPriceHistory {
     @Builder.Default
     private String currency = "EUR";
 
-    // FK cross-schema: public.users
     @Column(name = "changed_by")
     private Long changedBy;
 

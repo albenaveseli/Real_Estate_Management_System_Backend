@@ -6,11 +6,6 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/**
- * Permission — gjeneron tabelën public.permissions
- * Çdo permission = HTTP Method + API Path
- * P.sh: POST + /api/properties
- */
 @Entity
 @Table(
         name   = "permissions",

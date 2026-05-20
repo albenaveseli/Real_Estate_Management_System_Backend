@@ -33,11 +33,9 @@ public class PropertyLeadRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // FK cross-schema: public.users
     @Column(name = "client_id")
     private Long clientId;
 
-    // FK cross-schema: public.users
     @Column(name = "assigned_agent_id")
     private Long assignedAgentId;
 

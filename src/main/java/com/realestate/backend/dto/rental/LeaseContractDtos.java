@@ -11,8 +11,6 @@ import java.time.LocalDateTime;
 
 public class LeaseContractDtos {
 
-    // ── CREATE ────────────────────────────────────────────────
-
     public record LeaseContractCreateRequest(
 
             @NotNull(message = "property_id është i detyrueshëm")
@@ -47,7 +45,6 @@ public class LeaseContractDtos {
             String contractFileUrl
     ) {}
 
-    // ── UPDATE ────────────────────────────────────────────────
 
     public record LeaseContractUpdateRequest(
             @JsonProperty("start_date")       LocalDate startDate,
@@ -58,7 +55,6 @@ public class LeaseContractDtos {
             @JsonProperty("contract_file_url") String contractFileUrl
     ) {}
 
-    // ── STATUS CHANGE ─────────────────────────────────────────
 
     public record LeaseStatusRequest(
             @NotNull
@@ -85,7 +81,6 @@ public class LeaseContractDtos {
             @JsonProperty("updated_at")        LocalDateTime updatedAt
     ) {}
 
-    // ── SUMMARY (për listim) ──────────────────────────────────
 
     public record LeaseContractSummary(
             Long id,
