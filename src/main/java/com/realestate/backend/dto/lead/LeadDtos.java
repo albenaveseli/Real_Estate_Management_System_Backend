@@ -13,8 +13,6 @@ import java.time.LocalDateTime;
 
 public class LeadDtos {
 
-    // ── CREATE — pa ndryshim ──────────────────────────────────
-
     public record LeadCreateRequest(
 
             @JsonProperty("property_id")
@@ -36,7 +34,6 @@ public class LeadDtos {
             LeadSource source
     ) {}
 
-    // ── ASSIGN AGENT — pa ndryshim ────────────────────────────
 
     public record LeadAssignRequest(
 
@@ -44,21 +41,13 @@ public class LeadDtos {
             @JsonProperty("agent_id")
             Long agentId
     ) {}
-
-    // ── STATUS UPDATE — NDRYSHIM: shtohet DECLINED në allowableValues ─────────
-    // Shënim: DECLINED nuk dërgohet nga ky endpoint — ka endpoint të veçantë /decline
-    // Por e dokumentojmë këtu për Swagger clarity
-
     public record LeadStatusRequest(
 
             @NotNull(message = "Statusi është i detyrueshëm")
             @Schema(allowableValues = {"IN_PROGRESS","DONE","REJECTED"})
-            // NDRYSHIM: hequr NEW (nuk mund të kthehet manualisht)
-            // DECLINED trajtohet nga PATCH /api/leads/{id}/decline — jo nga ky endpoint
             LeadStatus status
     ) {}
 
-    // ── RESPONSE — pa ndryshim strukturor, por status tani mund të jetë DECLINED ─
 
     public record LeadResponse(
             Long id,
@@ -78,15 +67,4 @@ public class LeadDtos {
             @JsonProperty("updated_at")          LocalDateTime updatedAt
     ) {}
 
-    // ── SUMMARY — pa ndryshim ─────────────────────────────────
-
-    public record LeadSummaryResponse(
-            Long id,
-            @JsonProperty("client_id")         Long clientId,
-            @JsonProperty("assigned_agent_id") Long assignedAgentId,
-            LeadType type,
-            LeadSource source,
-            LeadStatus status,
-            @JsonProperty("created_at")        LocalDateTime createdAt
-    ) {}
 }

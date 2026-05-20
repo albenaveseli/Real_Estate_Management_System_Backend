@@ -12,8 +12,6 @@ import java.time.LocalDateTime;
 
 public class MaintenanceDtos {
 
-    // ── CREATE ────────────────────────────────────────────────
-
     public record MaintenanceCreateRequest(
 
             @NotNull(message = "property_id është i detyrueshëm")
@@ -40,7 +38,6 @@ public class MaintenanceDtos {
             BigDecimal estimatedCost
     ) {}
 
-    // ── UPDATE ────────────────────────────────────────────────
 
     public record MaintenanceUpdateRequest(
             String title,
@@ -50,8 +47,6 @@ public class MaintenanceDtos {
             @DecimalMin("0") @JsonProperty("estimated_cost") BigDecimal estimatedCost,
             @DecimalMin("0") @JsonProperty("actual_cost")    BigDecimal actualCost
     ) {}
-
-    // ── STATUS ────────────────────────────────────────────────
 
     public record MaintenanceStatusRequest(
             @NotNull
@@ -63,15 +58,12 @@ public class MaintenanceDtos {
             BigDecimal actualCost
     ) {}
 
-    // ── ASSIGN ────────────────────────────────────────────────
-
     public record MaintenanceAssignRequest(
             @NotNull(message = "assigned_to është i detyrueshëm")
             @JsonProperty("assigned_to")
             Long assignedTo
     ) {}
 
-    // ── RESPONSE ──────────────────────────────────────────────
 
     public record MaintenanceResponse(
             Long id,
@@ -91,15 +83,4 @@ public class MaintenanceDtos {
             @JsonProperty("updated_at")     LocalDateTime updatedAt
     ) {}
 
-    // ── SUMMARY ───────────────────────────────────────────────
-
-    public record MaintenanceSummaryResponse(
-            Long id,
-            @JsonProperty("property_id") Long propertyId,
-            String title,
-            MaintenanceCategory category,
-            MaintenancePriority priority,
-            MaintenanceStatus status,
-            @JsonProperty("created_at")  LocalDateTime createdAt
-    ) {}
 }

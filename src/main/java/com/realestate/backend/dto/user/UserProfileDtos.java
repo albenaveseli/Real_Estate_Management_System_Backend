@@ -10,8 +10,6 @@ import java.time.LocalDateTime;
 
 public class UserProfileDtos {
 
-    // ── USER RESPONSE ─────────────────────────────────────────
-
     public record UserResponse(
             Long id,
             String email,
@@ -65,9 +63,6 @@ public class UserProfileDtos {
             BigDecimal rating,
             @JsonProperty("total_reviews")     Integer totalReviews
     ) {}
-
-    // ── CLIENT PROFILE ────────────────────────────────────────
-
     public record ClientProfileRequest(
             String phone,
             @Schema(allowableValues = {"EMAIL","PHONE","WHATSAPP"})
@@ -90,8 +85,6 @@ public class UserProfileDtos {
             @JsonProperty("preferred_city")    String preferredCity,
             @JsonProperty("photo_url")         String photoUrl
     ) {}
-
-    // ── USER STATUS (ADMIN) ───────────────────────────────────
 
     public record UserStatusRequest(
             @NotNull
