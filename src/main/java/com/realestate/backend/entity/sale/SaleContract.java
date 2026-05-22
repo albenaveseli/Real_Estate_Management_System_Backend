@@ -40,11 +40,9 @@ public class SaleContract {
     @JoinColumn(name = "listing_id")
     private SaleListing listing;
 
-    // FK cross-schema: public.users
     @Column(name = "buyer_id")
     private Long buyerId;
 
-    // FK cross-schema: public.users
     @Column(name = "agent_id")
     private Long agentId;
 
@@ -64,7 +62,6 @@ public class SaleContract {
     @Column(name = "contract_file_url", length = 500)
     private String contractFileUrl;
 
-    // PENDING | COMPLETED | CANCELLED
     @Column(length = 20)
     @Builder.Default
     private String status = "PENDING";

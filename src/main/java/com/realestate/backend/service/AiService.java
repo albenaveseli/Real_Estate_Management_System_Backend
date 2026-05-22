@@ -34,7 +34,6 @@ public class AiService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // ── 1. Property Description Generator ────────────────────────
     public PropertyDescriptionResponse generateDescription(PropertyDescriptionRequest req) {
         String prompt = String.format(
                 "You are a professional real estate copywriter.\n" +
@@ -60,7 +59,6 @@ public class AiService {
         }
     }
 
-    // ── 2. Price Estimator ────────────────────────────────────────
     public PriceEstimateResponse estimatePrice(PriceEstimateRequest req) {
         long availableCount = propertyRepo.countByStatus(PropertyStatus.AVAILABLE);
 
@@ -92,15 +90,12 @@ public class AiService {
         }
     }
 
-    // ── 3. Client Chat Assistant ──────────────────────────────────
     public ChatResponse chat(ChatRequest req) {
-        // Nëse nuk ka API key → mock merr VETËM mesazhin e userit
         if (apiKey.equals("placeholder") || apiKey.isBlank()) {
             String reply = getChatMock(req.message().toLowerCase().trim());
             return new ChatResponse(reply, "assistant");
         }
 
-        // OpenAI — messages array me historik
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content",
                 "You are a helpful real estate assistant for a property management system " +
@@ -120,7 +115,6 @@ public class AiService {
         return new ChatResponse(reply.trim(), "assistant");
     }
 
-    // ── 4. Contract Summarizer ────────────────────────────────────
     public ContractSummaryResponse summarizeContract(ContractSummaryRequest req) {
         String prompt = String.format(
                 "You are a legal assistant for real estate contracts.\n" +
@@ -152,11 +146,9 @@ public class AiService {
         }
     }
 
-    // ── 5. Payment Risk Detector ──────────────────────────────────
     public PaymentRiskResponse detectPaymentRisk(Long clientId) {
 
-        
-        // ── 1. Merr TË GJITHA kontratat — jo vetëm ACTIVE ──
+
         var contracts = contractRepo.findByClientIdOrderByCreatedAtDesc(clientId,
                         org.springframework.data.domain.Pageable.unpaged())
                 .getContent();
@@ -169,7 +161,6 @@ public class AiService {
             var payments = paymentRepo.findByContract_IdOrderByDueDateAsc(c.getId());
             total += payments.size();
 
-            // ── 2. Konsidero overdue: status=OVERDUE OSE PENDING me due_date të kaluar ──
             overdue += payments.stream()
                     .filter(p ->
                             p.getStatus() == PaymentStatus.OVERDUE ||
@@ -178,7 +169,6 @@ public class AiService {
                                             && p.getDueDate().isBefore(today))
                     ).count();
         }
-        // ... pjesa tjetër mbetet njësoj
 
         String onTimeRate = total > 0
                 ? String.format("%.0f", ((double)(total - overdue) / total) * 100)
@@ -250,9 +240,6 @@ public class AiService {
         }
     }
 
-    // ════════════════════════════════════════════════════════════
-    // OPENAI API CALLS
-    // ════════════════════════════════════════════════════════════
 
     private String callOpenAI(String prompt) {
         return callOpenAIWithMessages(
@@ -303,9 +290,6 @@ public class AiService {
         }
     }
 
-    // ════════════════════════════════════════════════════════════
-    // MOCK — për features (description, price, risk, etj.)
-    // ════════════════════════════════════════════════════════════
 
     private String getMockResponseForFeature(String prompt) {
         String p = prompt.toLowerCase();
@@ -388,9 +372,6 @@ public class AiService {
         return "I understand your question! To find the property you are looking for, use Browse Properties where you can filter by city, price, bedrooms and type. Can you tell me more about what you are looking for?";
     }
 
-    // ════════════════════════════════════════════════════════════
-    // HELPERS
-    // ════════════════════════════════════════════════════════════
 
     private String extractField(String json, String field) {
         json = json.replaceAll("```json\\s*", "").replaceAll("```\\s*", "").trim();

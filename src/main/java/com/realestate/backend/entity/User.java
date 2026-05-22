@@ -46,7 +46,6 @@ public class User {
     @Column(name = "last_name", length = 50)
     private String lastName;
 
-    // Ruhet për backward compatibility
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Role role;
@@ -75,7 +74,7 @@ public class User {
     private List<RefreshToken> refreshTokens = new ArrayList<>();
 
     // ── Many-to-Many me RoleEntity ────────────────────────────
-    // IntelliJ diff gjeero user_roles automatikisht
+    // IntelliJ diff gjeneron user_roles automatikisht
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             schema             = "public",

@@ -104,7 +104,6 @@ public class SavedPropertyService {
         );
     }
 
-    // ── Response record ──────────────────────────────────────────
     public record SavedPropertyResponse(
             Long   savedId,
             Long   propertyId,

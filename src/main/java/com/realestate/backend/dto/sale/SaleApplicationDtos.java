@@ -10,8 +10,6 @@ import java.time.LocalDateTime;
 
 public class SaleApplicationDtos {
 
-    // ── CREATE (Buyer dërgon aplikim) ──────────────────────────
-
     public record SaleApplicationCreateRequest(
 
             @NotNull(message = "listing_id është i detyrueshëm")
@@ -32,8 +30,6 @@ public class SaleApplicationDtos {
             BigDecimal monthlyIncome
     ) {}
 
-    // ── STATUS UPDATE (Agent/Admin) ────────────────────────────
-
     public record SaleApplicationStatusRequest(
             @NotNull
             @Schema(allowableValues = {"APPROVED", "REJECTED", "CANCELLED"})
@@ -42,8 +38,6 @@ public class SaleApplicationDtos {
             @JsonProperty("rejection_reason")
             String rejectionReason
     ) {}
-
-    // ── RESPONSE (Buyer — nuk sheh rejection_reason) ───────────
 
     public record SaleApplicationResponse(
             Long id,
@@ -59,8 +53,6 @@ public class SaleApplicationDtos {
             @JsonProperty("created_at")             LocalDateTime createdAt,
             @JsonProperty("updated_at")             LocalDateTime updatedAt
     ) {}
-
-    // ── RESPONSE ADMIN (Agent/Admin — sheh rejection_reason) ───
 
     public record SaleApplicationAdminResponse(
             Long id,

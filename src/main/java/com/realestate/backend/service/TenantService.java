@@ -44,7 +44,6 @@ public class TenantService {
 
         tenant = tenantRepository.save(tenant);
 
-        // Proviziono schema automatikisht
         String schemaName = provisioningService.provisionIfNeeded(tenant);
 
         return toResponse(tenant, schemaName, true);
@@ -72,7 +71,6 @@ public class TenantService {
         return mapWithSchema(tenant);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────
     private TenantResponse mapWithSchema(TenantCompany tenant) {
         return schemaRegistryRepository
                 .findByTenant_Id(tenant.getId())

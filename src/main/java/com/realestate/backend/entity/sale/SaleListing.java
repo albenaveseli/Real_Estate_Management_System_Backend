@@ -36,7 +36,6 @@ public class SaleListing {
     @JoinColumn(name = "property_id")
     private Property property;
 
-    // FK cross-schema: public.users
     @Column(name = "agent_id")
     private Long agentId;
 

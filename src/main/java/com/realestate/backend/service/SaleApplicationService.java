@@ -25,20 +25,17 @@ public class SaleApplicationService {
 
     private final SaleApplicationRepository applicationRepo;
     private final SaleListingRepository     listingRepo;
-    private final PropertyRepository        propertyRepo;
     private final UserRepository userRepo;
 
     private static final Set<String> VALID_STATUSES =
             Set.of("PENDING", "APPROVED", "REJECTED", "CANCELLED");
 
-    // ── Buyer: Krijo aplikim ───────────────────────────────────
 
     @Transactional
     public SaleApplicationResponse createApplication(SaleApplicationCreateRequest req) {
 
         Long buyerId = TenantContext.getUserId();
 
-        // Gjej listingun aktiv
         SaleListing listing = listingRepo.findByIdAndDeletedAtIsNull(req.listingId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "SaleListing nuk u gjet: " + req.listingId()));
@@ -56,14 +53,12 @@ public class SaleApplicationService {
             );
         }
 
-        // Ekziston tashmë tek RentalService, por shto edhe RENTED check:
         if (property.getStatus() == PropertyStatus.RENTED) {
             throw new ConflictException(
                     "Kjo pronë është tashmë e dhënë me qira dhe nuk është e disponueshme për blerje."
             );
         }
 
-        // Kontrollo duplicate PENDING/APPROVED
         applicationRepo.findByListing_IdAndBuyerIdAndStatusIn(
                         req.listingId(), buyerId, List.of("PENDING", "APPROVED"))
                 .ifPresent(a -> {
@@ -90,7 +85,6 @@ public class SaleApplicationService {
         return toBuyerResponse(saved);
     }
 
-    // ── Buyer: Aplikimet e mia ─────────────────────────────────
 
     @Transactional(readOnly = true)
     public Page<SaleApplicationResponse> getMyApplications(Pageable pageable) {
@@ -99,8 +93,6 @@ public class SaleApplicationService {
                 .findByBuyerIdOrderByCreatedAtDesc(buyerId, pageable)
                 .map(this::toBuyerResponse);
     }
-
-    // ── Buyer: Anulo aplikimin tim ─────────────────────────────
 
     @Transactional
     public SaleApplicationResponse cancelMyApplication(Long id) {
@@ -120,7 +112,6 @@ public class SaleApplicationService {
         return toBuyerResponse(findApplication(id));
     }
 
-    // ── Admin/Agent: Shiko aplikimet e një listingu ────────────
 
     @Transactional(readOnly = true)
     public Page<SaleApplicationAdminResponse> getByListing(Long listingId, Pageable pageable) {
@@ -130,8 +121,6 @@ public class SaleApplicationService {
                 .map(this::toAdminResponse);
     }
 
-    // ── Admin/Agent: Shiko aplikimet e një prone ───────────────
-
     @Transactional(readOnly = true)
     public Page<SaleApplicationAdminResponse> getByProperty(Long propertyId, Pageable pageable) {
         assertIsAdminOrAgent();
@@ -140,7 +129,6 @@ public class SaleApplicationService {
                 .map(this::toAdminResponse);
     }
 
-    // ── Admin/Agent: Aplikimet e agjentit tim ─────────────────
 
     @Transactional(readOnly = true)
     public Page<SaleApplicationAdminResponse> getMyAgentApplications(Pageable pageable) {
@@ -150,7 +138,6 @@ public class SaleApplicationService {
                 .map(this::toAdminResponse);
     }
 
-    // ── Admin/Agent: Shiko sipas statusit ─────────────────────
 
     @Transactional(readOnly = true)
     public Page<SaleApplicationAdminResponse> getByStatus(String status, Pageable pageable) {
@@ -163,8 +150,6 @@ public class SaleApplicationService {
                 .map(this::toAdminResponse);
     }
 
-    // ── Admin/Agent: Ndrysho statusin ─────────────────────────
-
     @Transactional
     public SaleApplicationAdminResponse updateStatus(Long id, SaleApplicationStatusRequest req) {
         assertIsAdminOrAgent();
@@ -174,11 +159,6 @@ public class SaleApplicationService {
         if (!VALID_STATUSES.contains(newStatus)) {
             throw new BadRequestException("Status i pavlefshëm: " + newStatus);
         }
-
-        // Tranzicionet e lejuara:
-        // PENDING → APPROVED | REJECTED | CANCELLED
-        // APPROVED → CANCELLED   (agent mund ta anulojë)
-        // REJECTED / CANCELLED → nuk ndryshon
         if ("REJECTED".equals(app.getStatus()) || "CANCELLED".equals(app.getStatus())) {
             throw new ConflictException(
                     "Aplikimi me status '" + app.getStatus() + "' nuk mund të ndryshohet");
@@ -198,7 +178,6 @@ public class SaleApplicationService {
         return toAdminResponse(findApplication(id));
     }
 
-    // ── Get by ID ──────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public SaleApplicationAdminResponse getById(Long id) {
@@ -206,7 +185,6 @@ public class SaleApplicationService {
         return toAdminResponse(findApplication(id));
     }
 
-    // ── Helpers ────────────────────────────────────────────────
 
     private SaleApplication findApplication(Long id) {
         return applicationRepo.findById(id)
@@ -220,7 +198,6 @@ public class SaleApplicationService {
         }
     }
 
-    // ── Mappers ────────────────────────────────────────────────
 
     private SaleApplicationResponse toBuyerResponse(SaleApplication a) {
         return new SaleApplicationResponse(

@@ -29,8 +29,6 @@ public class PropertyFeature {
     @JoinColumn(name = "property_id", nullable = false)
     private Property property;
 
-    // 'parking','pool','furnished','elevator','balcony',
-    // 'garden','gym','security','air_conditioning','storage','fireplace'
     @Column(nullable = false, length = 100)
     private String feature;
 }

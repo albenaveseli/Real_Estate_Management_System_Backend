@@ -8,10 +8,6 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * RoleEntity — gjeneron tabelën public.roles
- * IntelliJ diff do gjenerojë CREATE TABLE automatikisht.
- */
 @Entity
 @Table(
         name   = "roles",

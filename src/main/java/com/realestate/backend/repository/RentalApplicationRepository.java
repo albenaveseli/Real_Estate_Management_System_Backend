@@ -14,19 +14,15 @@ import java.util.Optional;
 @Repository
 public interface RentalApplicationRepository extends JpaRepository<RentalApplication, Long> {
 
-    // Aplikimet sipas listing
     List<RentalApplication> findByListing_IdOrderByCreatedAtDesc(Long listingId);
 
-    // Aplikimet e klientit
     Page<RentalApplication> findByClientIdOrderByCreatedAtDesc(Long clientId, Pageable pageable);
 
-    // A ka aplikim aktiv ky klient për këtë listing?
     boolean existsByListing_IdAndClientIdAndStatusIn(
             Long listingId, Long clientId, List<RentalApplicationStatus> statuses);
 
     Optional<RentalApplication> findByIdAndClientId(Long id, Long clientId);
 
-    // Ndrysho statusin + reviewer
     @Modifying
     @Query("""
         UPDATE RentalApplication ra

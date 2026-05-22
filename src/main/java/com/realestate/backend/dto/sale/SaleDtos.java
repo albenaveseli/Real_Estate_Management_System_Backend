@@ -12,8 +12,6 @@ import java.util.List;
 
 public class SaleDtos {
 
-    // ── SALE LISTING ──────────────────────────────────────────
-
     public record SaleListingCreateRequest(
 
             @NotNull(message = "property_id është i detyrueshëm")
@@ -53,8 +51,6 @@ public class SaleDtos {
             @JsonProperty("created_at") LocalDateTime createdAt,
             @JsonProperty("updated_at") LocalDateTime updatedAt
     ) {}
-
-    // ── SALE CONTRACT ─────────────────────────────────────────
 
     public record SaleContractCreateRequest(
 
@@ -114,8 +110,6 @@ public class SaleDtos {
             @JsonProperty("created_at")        LocalDateTime createdAt,
             @JsonProperty("updated_at")        LocalDateTime updatedAt
     ) {}
-
-    // ── SALE PAYMENT ──────────────────────────────────────────
 
     public record SalePaymentCreateRequest(
 

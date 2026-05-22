@@ -33,7 +33,6 @@ public class RentalApplication {
     @JoinColumn(name = "listing_id")
     private RentalListing listing;
 
-    // FK cross-schema: public.users
     @Column(name = "client_id")
     private Long clientId;
 
@@ -51,7 +50,6 @@ public class RentalApplication {
     @Column(name = "move_in_date")
     private LocalDate moveInDate;
 
-    // FK cross-schema: public.users (agjenti që shqyrtoi)
     @Column(name = "reviewed_by")
     private Long reviewedBy;
 

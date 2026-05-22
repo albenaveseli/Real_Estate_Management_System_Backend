@@ -34,7 +34,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     """)
     List<User> findAllByTenantId(@Param("tenantId") Long tenantId);
 
-    // Përdoret nga LeadService për të marrë emrat e agjentit dhe klientit
     @Query("SELECT u.firstName || ' ' || u.lastName FROM User u WHERE u.id = :id")
     Optional<String> findFullNameById(@Param("id") Long id);
 }

@@ -41,11 +41,9 @@ public class LeaseContract {
     @JoinColumn(name = "listing_id")
     private RentalListing listing;
 
-    // FK cross-schema: public.users
     @Column(name = "client_id")
     private Long clientId;
 
-    // FK cross-schema: public.users
     @Column(name = "agent_id")
     private Long agentId;
 
@@ -81,7 +79,6 @@ public class LeaseContract {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Pagesat e qirasë
     @OneToMany(mappedBy = "contract", cascade = CascadeType.ALL)
     @Builder.Default
     private List<Payment> payments = new ArrayList<>();

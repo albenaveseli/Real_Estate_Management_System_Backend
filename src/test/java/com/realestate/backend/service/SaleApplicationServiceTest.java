@@ -33,16 +33,15 @@ class SaleApplicationServiceTest {
     @Mock
     SaleListingRepository listingRepo;
     @Mock
-    PropertyRepository propertyRepo;
-    @Mock
     UserRepository userRepo;
+    // PropertyRepository HEQUR — Service nuk e ka
 
     SaleApplicationService saleApplicationService;
 
     @BeforeEach
     void setUp() {
         saleApplicationService = new SaleApplicationService(
-                applicationRepo, listingRepo, propertyRepo, userRepo
+                applicationRepo, listingRepo, userRepo
         );
     }
 

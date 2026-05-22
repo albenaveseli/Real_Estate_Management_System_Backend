@@ -26,7 +26,6 @@ public class Notification {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // FK cross-schema: public.users
     @Column(name = "user_id")
     private Long userId;
 

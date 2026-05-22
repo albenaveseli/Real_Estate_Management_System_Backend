@@ -18,14 +18,12 @@ public class ClientProfile {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // FK cross-schema: public.users — UNIQUE (1 profil per user)
     @Column(name = "user_id", unique = true, nullable = false)
     private Long userId;
 
     @Column(length = 30)
     private String phone;
 
-    // EMAIL | PHONE | WHATSAPP
     @Column(name = "preferred_contact", length = 20)
     @Builder.Default
     private String preferredContact = "EMAIL";

@@ -15,8 +15,6 @@ import java.util.List;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
-    // Pagesat sipas kontratës — LEFT JOIN FETCH recipient
-    // pa fetch, Hibernate lazy-load e kthen null kur sesioni mbyllet
     @Query("""
         SELECT p FROM Payment p
         LEFT JOIN FETCH p.recipient
@@ -25,8 +23,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     """)
     List<Payment> findByContract_IdOrderByDueDateAsc(@Param("contractId") Long contractId);
 
-    // Pagesat sipas statusit — LEFT JOIN FETCH recipient
-    // Page<> nuk lejon JOIN FETCH direkt — duhet countQuery i veçantë
     @Query(
             value = """
             SELECT p FROM Payment p
@@ -42,7 +38,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     Page<Payment> findByStatusOrderByDueDateAsc(
             @Param("status") PaymentStatus status, Pageable pageable);
 
-    // Pagesat e vonuara — LEFT JOIN FETCH recipient
     @Query("""
         SELECT p FROM Payment p
         LEFT JOIN FETCH p.recipient
@@ -53,7 +48,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     List<Payment> findOverduePayments(@Param("today") LocalDate today);
 
 
-    // Totali i te ardhurave te paguara
     @Query("""
         SELECT COALESCE(SUM(p.amount), 0)
         FROM Payment p
@@ -61,7 +55,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     """)
     BigDecimal totalRevenue();
 
-    // Totali sipas kontrates
     @Query("""
         SELECT COALESCE(SUM(p.amount), 0)
         FROM Payment p
@@ -71,6 +64,5 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     BigDecimal totalPaidByContract(@Param("contractId") Long contractId);
 
 
-    // Numero pagesat e vonuara
     long countByStatus(PaymentStatus status);
 }

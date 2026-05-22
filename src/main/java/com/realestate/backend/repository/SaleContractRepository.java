@@ -23,7 +23,6 @@ public interface SaleContractRepository extends JpaRepository<SaleContract, Long
 
     Optional<SaleContract> findByProperty_IdAndStatus(Long propertyId, String status);
 
-    // Ndrysho statusin
     @Modifying
     @Query("""
         UPDATE SaleContract sc

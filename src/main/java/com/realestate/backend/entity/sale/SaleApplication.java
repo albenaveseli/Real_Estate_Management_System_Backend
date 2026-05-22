@@ -39,35 +39,28 @@ public class SaleApplication {
     @JoinColumn(name = "property_id")
     private Property property;
 
-    // FK cross-schema: public.users
     @Column(name = "buyer_id", nullable = false)
     private Long buyerId;
 
-    // FK cross-schema: public.users (agent assigned to listing)
     @Column(name = "agent_id")
     private Long agentId;
 
     @Column(columnDefinition = "TEXT")
     private String message;
 
-    // Oferta e blerësit (opsionale)
     @Column(name = "offer_price", precision = 12, scale = 2)
     private BigDecimal offerPrice;
 
-    // Data e dëshiruar e blerjes
     @Column(name = "desired_purchase_date")
     private LocalDate desiredPurchaseDate;
 
-    // Të ardhurat mujore (për financim)
     @Column(name = "monthly_income", precision = 12, scale = 2)
     private BigDecimal monthlyIncome;
 
-    // PENDING | APPROVED | REJECTED | CANCELLED
     @Column(length = 20)
     @Builder.Default
     private String status = "PENDING";
 
-    // Arsyeja e refuzimit (vetëm për admin/agent — nuk i shfaqet blerësit)
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 

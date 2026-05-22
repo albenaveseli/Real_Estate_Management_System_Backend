@@ -38,15 +38,12 @@ public class SaleService {
     private final LeadRequestRepository leadRequestRepo;
     private final NotificationService notificationService;
 
-    // Vlerat e lejuara (reflektojnë CHECK constraints në DB)
     private static final Set<String> VALID_CURRENCIES     = Set.of("EUR", "USD", "ALL", "GBP", "CHF");
     private static final Set<String> VALID_CONTRACT_STATUS = Set.of("PENDING", "COMPLETED", "CANCELLED");
     private static final Set<String> VALID_PAYMENT_TYPES  = Set.of("DEPOSIT", "INSTALLMENT", "FULL", "COMMISSION", "AGENT_COMMISSION", "CLIENT_BONUS");
-    private static final Set<String> VALID_PAYMENT_STATUS = Set.of("PENDING", "PAID", "FAILED", "REFUNDED");
     private static final Set<String> VALID_PAYMENT_METHODS =
             Set.of("BANK_TRANSFER", "CASH", "CARD", "CHECK", "ONLINE");
 
-    // ================ SALE LISTINGS ==============================
 
     @Transactional(readOnly = true)
     public Page<SaleListingResponse> getAllListings(Pageable pageable) {
@@ -73,7 +70,6 @@ public class SaleService {
     public SaleListingResponse createListing(SaleListingCreateRequest req) {
         assertIsAdminOrAgent();
 
-        // Validime
         if (req.price() == null || req.price().compareTo(BigDecimal.ZERO) < 0) {
             throw new BadRequestException("Çmimi duhet të jetë 0 ose më i madh");
         }
@@ -143,7 +139,6 @@ public class SaleService {
         log.info("SaleListing id={} u fshi (soft delete)", id);
     }
 
-    // ======================= SALE CONTRACTS ==========================
 
     @Transactional(readOnly = true)
     public Page<SaleContractResponse> getAllContracts(Pageable pageable) {
@@ -190,7 +185,6 @@ public class SaleService {
             throw new BadRequestException("Data e dorëzimit nuk mund të jetë para datës së kontratës");
         }
 
-        // Kontratë aktive ekziston tashmë?
         contractRepo.findByProperty_IdAndStatus(req.propertyId(), "PENDING")
                 .ifPresent(c -> {
                     throw new ConflictException("Prona ka tashmë kontratë PENDING: " + c.getId());
@@ -199,13 +193,11 @@ public class SaleService {
         Property property = propertyRepo.findByIdAndDeletedAtIsNull(req.propertyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Prona nuk u gjet: " + req.propertyId()));
 
-        // Kontro nese prona eshte tashmë e shitur
         if (property.getStatus() == PropertyStatus.SOLD) {
             throw new ConflictException(
                     "Kjo pronë është tashmë e shitur dhe nuk mund të blihet sërish."
             );
         }
-// Kontro nese ka kontrate COMPLETED per kete prone
         contractRepo.findByProperty_IdAndStatus(req.propertyId(), "COMPLETED")
                 .ifPresent(c -> {
                     throw new ConflictException(
@@ -281,13 +273,10 @@ public class SaleService {
         assertIsAdminOrAgent();
         SaleContract contract = findContract(id);
 
-        // Validime
         if (!VALID_CONTRACT_STATUS.contains(req.status())) {
             throw new BadRequestException("Statusi i pavlefshëm: " + req.status()
                     + ". Vlerat e lejuara: " + VALID_CONTRACT_STATUS);
         }
-        // Tranzicionet e lejuara: PENDING → COMPLETED | CANCELLED
-        // Nuk mund të kthehesh nga COMPLETED ose CANCELLED
         if ("COMPLETED".equals(contract.getStatus()) || "CANCELLED".equals(contract.getStatus())) {
             throw new ConflictException("Kontrata me status '"
                     + contract.getStatus() + "' nuk mund të ndryshohet");
@@ -322,7 +311,6 @@ public class SaleService {
             );
         }
         if ("CANCELLED".equals(req.status())) {
-            // Kontro nese ka kontrate tjeter PENDING per kete prone
             boolean hasOther = contractRepo.findByProperty_IdOrderByCreatedAtDesc(
                     contract.getProperty().getId()
             ).stream().anyMatch(c -> !c.getId().equals(id) && "PENDING".equals(c.getStatus()));
@@ -334,13 +322,9 @@ public class SaleService {
         return toContractResponse(findContract(id));
     }
 
-    // ======================== SALE PAYMENTS ==========================
-
     @Transactional(readOnly = true)
     public List<SalePaymentResponse> getPaymentsByContract(Long contractId) {
         SaleContract contract = findContract(contractId);
-
-        // CLIENT mund të shohë vetëm pagesat e kontratave të tij
         if (TenantContext.hasRole("CLIENT")) {
             if (!contract.getBuyerId().equals(TenantContext.getUserId())) {
                 throw new ForbiddenException("Nuk keni akses në këtë kontratë");
@@ -377,7 +361,6 @@ public class SaleService {
     public SalePaymentResponse createPayment(SalePaymentCreateRequest req) {
         assertIsAdminOrAgent();
 
-        // Validime
         if (req.amount() == null || req.amount().compareTo(BigDecimal.ZERO) < 0) {
             throw new BadRequestException("Shuma duhet të jetë 0 ose më e madhe");
         }
@@ -395,7 +378,6 @@ public class SaleService {
 
         SaleContract contract = findContract(req.contractId());
 
-        // Nuk mund të shtohen pagesa manuale në kontratë COMPLETED
         if ("CANCELLED".equals(contract.getStatus())
                 || "COMPLETED".equals(contract.getStatus())) {
             throw new InvalidStateException(
@@ -442,7 +424,6 @@ public class SaleService {
         BigDecimal ownerAmount     = salePrice.multiply(new BigDecimal("0.97"));
         String     currency        = contract.getCurrency();
 
-        // ← E RE: llogarit shumën e depozitave dhe kësteve të paguara tashmë
         BigDecimal alreadyPaid = paymentRepo
                 .findByContract_IdOrderByCreatedAtAsc(contract.getId())
                 .stream()
@@ -452,10 +433,8 @@ public class SaleService {
                 .map(SalePayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // ownerAmount i mbetur = 97% - çfarë është paguar tashmë
         BigDecimal remainingOwnerAmount = ownerAmount.subtract(alreadyPaid);
 
-        // Sigurohu që nuk shkojmë negativ
         if (remainingOwnerAmount.compareTo(BigDecimal.ZERO) < 0) {
             remainingOwnerAmount = BigDecimal.ZERO;
         }
@@ -474,16 +453,9 @@ public class SaleService {
         boolean isClientOwnedProperty = ownerClientId != null;
 
         if (isClientOwnedProperty) {
-            // ══════════════════════════════════════════════════
-            // SKENARI 1 — Pronë e klientit
-            // ══════════════════════════════════════════════════
             User owner = userRepo.findById(ownerClientId)
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Pronari nuk u gjet: " + ownerClientId));
-
-            // FULL — vetëm shuma e mbetur pas depozitave
-            // Nëse alreadyPaid = 0 → FULL = 97% e plotë
-            // Nëse alreadyPaid = 10,000 → FULL = 97,000 - 10,000 = 87,000
             if (remainingOwnerAmount.compareTo(BigDecimal.ZERO) > 0) {
                 paymentRepo.save(SalePayment.builder()
                         .contract(contract)
@@ -494,8 +466,6 @@ public class SaleService {
                         .status("PENDING")
                         .build());
             }
-
-            // COMMISSION — 50% → kompania (nuk ndikohet nga depozita)
             paymentRepo.save(SalePayment.builder()
                     .contract(contract)
                     .amount(commissionTotal.multiply(new BigDecimal("0.50")))
@@ -505,7 +475,6 @@ public class SaleService {
                     .status("PENDING")
                     .build());
 
-            // AGENT_COMMISSION — 40% → agjenti
             userRepo.findById(contract.getAgentId()).ifPresent(agent ->
                     paymentRepo.save(SalePayment.builder()
                             .contract(contract)
@@ -517,7 +486,6 @@ public class SaleService {
                             .build())
             );
 
-            // CLIENT_BONUS — 10% → pronari
             paymentRepo.save(SalePayment.builder()
                     .contract(contract)
                     .amount(commissionTotal.multiply(new BigDecimal("0.10")))
@@ -535,11 +503,6 @@ public class SaleService {
                     alreadyPaid);
 
         } else {
-            // ══════════════════════════════════════════════════
-            // SKENARI 2 — Pronë e kompanisë
-            // ══════════════════════════════════════════════════
-
-            // FULL — vetëm shuma e mbetur
             if (remainingOwnerAmount.compareTo(BigDecimal.ZERO) > 0) {
                 paymentRepo.save(SalePayment.builder()
                         .contract(contract)
@@ -551,7 +514,6 @@ public class SaleService {
                         .build());
             }
 
-            // COMMISSION — 60% → kompania
             paymentRepo.save(SalePayment.builder()
                     .contract(contract)
                     .amount(commissionTotal.multiply(new BigDecimal("0.60")))
@@ -561,7 +523,6 @@ public class SaleService {
                     .status("PENDING")
                     .build());
 
-            // AGENT_COMMISSION — 40% → agjenti
             userRepo.findById(contract.getAgentId()).ifPresent(agent ->
                     paymentRepo.save(SalePayment.builder()
                             .contract(contract)
@@ -588,7 +549,6 @@ public class SaleService {
         SalePayment payment = paymentRepo.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Pagesa nuk u gjet: " + id));
 
-        // Validime
         if ("PAID".equals(payment.getStatus())) {
             throw new ConflictException("Pagesa #" + id + " është tashmë e paguar");
         }
@@ -619,7 +579,6 @@ public class SaleService {
                 .map(this::toListingResponse);
     }
 
-    // Helpers
 
     private SaleListing findActiveListing(Long id) {
         return listingRepo.findByIdAndDeletedAtIsNull(id)
@@ -644,7 +603,6 @@ public class SaleService {
         }
     }
 
-    // Mappers
 
     private SaleListingResponse toListingResponse(SaleListing l) {
         return new SaleListingResponse(
@@ -672,12 +630,12 @@ public class SaleService {
     private SalePaymentResponse toPaymentResponse(SalePayment p) {
         Long   recipientId   = null;
         String recipientName = null;
-        String recipientType = "COMPANY"; // default kur NULL
+        String recipientType = "COMPANY";
 
         if (p.getRecipient() != null) {
             recipientId   = p.getRecipient().getId();
             recipientName = p.getRecipient().getFullName();
-            recipientType = p.getRecipient().getRole().name(); // AGENT / CLIENT
+            recipientType = p.getRecipient().getRole().name();
         }
 
         return new SalePaymentResponse(
@@ -685,7 +643,7 @@ public class SaleService {
                 p.getContract() != null ? p.getContract().getId() : null,
                 p.getAmount(), p.getCurrency(), p.getPaymentType(),
                 p.getPaidDate(), p.getPaymentMethod(), p.getTransactionRef(),
-                recipientId, recipientName, recipientType,  // ← TRE fusha të reja
+                recipientId, recipientName, recipientType,
                 p.getStatus(), p.getCreatedAt()
         );
     }

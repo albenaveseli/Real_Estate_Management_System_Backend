@@ -13,8 +13,6 @@ import java.util.List;
 
 public class PaymentDtos {
 
-    // ── CREATE ────────────────────────────────────────────────
-
     public record PaymentCreateRequest(
 
             @NotNull(message = "contract_id është i detyrueshëm")
@@ -42,8 +40,6 @@ public class PaymentDtos {
             String notes
     ) {}
 
-    // ── MARK AS PAID ──────────────────────────────────────────
-
     public record PaymentMarkPaidRequest(
 
             @JsonProperty("payment_method")
@@ -56,15 +52,11 @@ public class PaymentDtos {
             LocalDate paidDate
     ) {}
 
-    // ── STATUS UPDATE ─────────────────────────────────────────
-
     public record PaymentStatusRequest(
             @NotNull
             @Schema(allowableValues = {"PENDING","PAID","FAILED","OVERDUE","REFUNDED"})
             PaymentStatus status
     ) {}
-
-    // ── RESPONSE ──────────────────────────────────────────────
 
     public record PaymentResponse(
             Long id,
@@ -76,17 +68,13 @@ public class PaymentDtos {
             @JsonProperty("paid_date")        LocalDate paidDate,
             @JsonProperty("payment_method")   String paymentMethod,
             @JsonProperty("transaction_ref")  String transactionRef,
-            // ── Recipient — identik me SalePaymentResponse ──
             @JsonProperty("recipient_id")     Long recipientId,
             @JsonProperty("recipient_name")   String recipientName,
             @JsonProperty("recipient_type")   String recipientType,
-            // ────────────────────────────────────────────────
             PaymentStatus status,
             String notes,
             @JsonProperty("created_at")       LocalDateTime createdAt
     ) {}
-
-    // ── SUMMARY (stats dashboard) ─────────────────────────────
 
     public record PaymentSummaryResponse(
             @JsonProperty("total_payments")  int totalPayments,

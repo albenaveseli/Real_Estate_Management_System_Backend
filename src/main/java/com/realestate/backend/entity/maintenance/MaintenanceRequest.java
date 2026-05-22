@@ -40,11 +40,9 @@ public class MaintenanceRequest {
     @JoinColumn(name = "lease_id")
     private LeaseContract lease;
 
-    // FK cross-schema: public.users
     @Column(name = "requested_by")
     private Long requestedBy;
 
-    // FK cross-schema: public.users
     @Column(name = "assigned_to")
     private Long assignedTo;
 

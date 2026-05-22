@@ -21,8 +21,6 @@ public interface LeadRequestRepository extends JpaRepository<PropertyLeadRequest
 
     List<PropertyLeadRequest> findByProperty_IdOrderByCreatedAtDesc(Long propertyId);
 
-    // Leads të paassinjuara (për admin) — NDRYSHIM: shton edhe DECLINED
-    // DECLINED kthehet si NEW pa agjent, kështu admini e sheh në unassigned
     @Query("""
         SELECT lr FROM PropertyLeadRequest lr
         WHERE lr.assignedAgentId IS NULL
@@ -31,7 +29,6 @@ public interface LeadRequestRepository extends JpaRepository<PropertyLeadRequest
     """)
     List<PropertyLeadRequest> findUnassigned();
 
-    // Ndrysho statusin
     @Modifying
     @Query("""
         UPDATE PropertyLeadRequest lr
@@ -40,8 +37,6 @@ public interface LeadRequestRepository extends JpaRepository<PropertyLeadRequest
     """)
     void updateStatus(@Param("id") Long id, @Param("status") LeadStatus status);
 
-    // NDRYSHIM: assignAgent NUK e kalon më automatikisht në IN_PROGRESS
-    // Statusi mbetet NEW — agjenti vetë klikon Accept për ta kaluar në IN_PROGRESS
     @Modifying
     @Query("""
         UPDATE PropertyLeadRequest lr
@@ -51,8 +46,6 @@ public interface LeadRequestRepository extends JpaRepository<PropertyLeadRequest
     """)
     void assignAgent(@Param("id") Long id, @Param("agentId") Long agentId);
 
-    // SHTUAR: declineLead — heq agjentin dhe kthon statusin në NEW
-    // Agjenti refuzon lead-in operacionalisht — admini do ta reassignojë
     @Modifying
     @Query("""
         UPDATE PropertyLeadRequest lr

@@ -14,19 +14,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Property — tabela kryesore per-tenant.
- *
- * KUJDES — search_vector:
- *   Kjo kolona është GENERATED ALWAYS AS ... STORED në PostgreSQL.
- *   Hibernate nuk mund ta shkruajë — insertable=false, updatable=false.
- *   Full-text search bëhet me native query në PropertyRepository.
- *
- * FK cross-schema:
- *   agent_id → public.users(id)
- *   Por në JPA nuk mund të deklarohet @ManyToOne cross-schema direkt.
- *   Ruhet si Long dhe resolvohet nga service kur duhet user details.
- */
 @Entity
 @Table(
         name = "properties",
@@ -49,7 +36,6 @@ public class Property {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // FK cross-schema: public.users → ruhet si Long
     @Column(name = "agent_id")
     private Long agentId;
 
@@ -101,12 +87,10 @@ public class Property {
     @Column(name = "price_per_sqm", precision = 10, scale = 2)
     private BigDecimal pricePerSqm;
 
-    // Relacion me Address brenda të njëjtës skemë
     @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "address_id")
     private Address address;
 
-    // search_vector: GENERATED ALWAYS AS STORED — vetëm lexim
     @Column(name = "search_vector", insertable = false, updatable = false,
             columnDefinition = "tsvector")
     private String searchVector;
@@ -130,12 +114,10 @@ public class Property {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
-    // Imazhet e pronës — OneToMany brenda skemës
     @OneToMany(mappedBy = "property", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<PropertyImage> images = new ArrayList<>();
 
-    // Features/amenities
     @OneToMany(mappedBy = "property", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<PropertyFeature> features = new ArrayList<>();

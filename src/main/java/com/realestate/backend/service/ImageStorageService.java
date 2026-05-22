@@ -60,8 +60,6 @@ public class ImageStorageService {
     public void delete(String imageUrl) {
         if (imageUrl == null || imageUrl.isBlank()) return;
         try {
-            // imageUrl = /uploads/properties/1/abc.jpg
-            // Hiq "/" e parë dhe ndërto path
             Path file = Paths.get(uploadDir, imageUrl.replaceFirst("^/uploads/", ""));
             Files.deleteIfExists(file);
             log.info("Imazhi u fshi: {}", file);

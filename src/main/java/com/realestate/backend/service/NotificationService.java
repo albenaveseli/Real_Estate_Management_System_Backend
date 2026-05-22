@@ -11,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 
 import java.util.List;
 
@@ -23,7 +21,6 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepo;
 
-    // ── Merr notifikimet e mia ────────────────────────────────
     @Transactional(readOnly = true)
     public Page<NotificationResponse> getMyNotifications(Pageable pageable) {
         Long userId = TenantContext.getUserId();
@@ -31,15 +28,12 @@ public class NotificationService {
                 .map(this::toResponse);
     }
 
-    // ── Numëro të palexuarat ──────────────────────────────────
     @Transactional(readOnly = true)
-    @Cacheable(value = "notif-count", key = "T(com.realestate.backend.multitenancy.TenantContext).getUserId()")
     public UnreadCountResponse getUnreadCount() {
         long count = notificationRepo.countByUserIdAndIsReadFalse(TenantContext.getUserId());
         return new UnreadCountResponse(count);
     }
 
-    // ── Merr të palexuarat ────────────────────────────────────
     @Transactional(readOnly = true)
     public List<NotificationResponse> getUnread() {
         return notificationRepo
@@ -47,9 +41,7 @@ public class NotificationService {
                 .stream().map(this::toResponse).toList();
     }
 
-    // ── Shëno një si të lexuar ────────────────────────────────
     @Transactional
-    @CacheEvict(value = "notif-count", key = "T(com.realestate.backend.multitenancy.TenantContext).getUserId()")
     public void markOneRead(Long id) {
         Long userId = TenantContext.getUserId();
         int updated = notificationRepo.markOneRead(id, userId);
@@ -58,21 +50,17 @@ public class NotificationService {
         }
     }
 
-    // ── Shëno të gjitha si të lexuara ─────────────────────────
     @Transactional
-    @CacheEvict(value = "notif-count",  key = "T(com.realestate.backend.multitenancy.TenantContext).getUserId()")
     public BatchReadResponse markAllRead() {
         int marked = notificationRepo.markAllReadForUser(TenantContext.getUserId());
         return new BatchReadResponse(marked, marked + " njoftime u shënuan si të lexuara");
     }
 
-    // ── Fshij të lexuarat ─────────────────────────────────────
     @Transactional
     public void deleteRead() {
         notificationRepo.deleteReadForUser(TenantContext.getUserId());
     }
 
-    // ── Krijo njoftim (nga sistemi / service-t e tjera) ───────
     @Transactional
     public NotificationResponse create(NotificationCreateRequest req) {
         Notification notification = Notification.builder()
@@ -87,11 +75,10 @@ public class NotificationService {
                 .build();
 
         Notification saved = notificationRepo.save(notification);
-        log.debug("Njoftim u krijua për userId={}, type={}", req.userId(), req.type());
+        log.debug("Notification created for userId={}, type={}", req.userId(), req.type());
         return toResponse(saved);
     }
 
-    // ── Helper i brendshëm (pa DTO) ───────────────────────────
     @Transactional
     public void sendNotification(Long userId, String title, String message,
                                  NotificationType type, String entityType,
@@ -108,8 +95,6 @@ public class NotificationService {
                 .build();
         notificationRepo.save(notification);
     }
-
-    // ── Mapper ────────────────────────────────────────────────
 
     private NotificationResponse toResponse(Notification n) {
         return new NotificationResponse(

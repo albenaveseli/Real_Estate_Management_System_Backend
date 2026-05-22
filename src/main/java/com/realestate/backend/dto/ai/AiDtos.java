@@ -5,7 +5,6 @@ import java.util.List;
 
 public class AiDtos {
 
-    // ── 1. Property Description ───────────────────────────────────
     public record PropertyDescriptionRequest(
             String type, Integer bedrooms, Integer bathrooms,
             String areaSqm, Integer floor, Integer yearBuilt,
@@ -16,7 +15,6 @@ public class AiDtos {
             String title, String description
     ) {}
 
-    // ── 2. Price Estimator ────────────────────────────────────────
     public record PriceEstimateRequest(
             String type, String areaSqm, Integer bedrooms,
             String city, Integer floor, Integer totalFloors,
@@ -29,7 +27,6 @@ public class AiDtos {
             String confidence, String reasoning
     ) {}
 
-    // ── 3. Chat ───────────────────────────────────────────────────
     public record ChatMessage(String role, String content) {}
 
     public record ChatRequest(
@@ -39,7 +36,6 @@ public class AiDtos {
 
     public record ChatResponse(String message, String role) {}
 
-    // ── 4. Contract Summary ───────────────────────────────────────
     public record ContractSummaryRequest(
             @JsonProperty("contract_id") Long contractId,
             @JsonProperty("property_id") Long propertyId,
@@ -58,7 +54,6 @@ public class AiDtos {
             @JsonProperty("status_note")            String statusNote
     ) {}
 
-    // ── 5. Payment Risk ───────────────────────────────────────────
     public record PaymentRiskResponse(
             @JsonProperty("client_id")        Long clientId,
             @JsonProperty("risk_score")        int riskScore,
@@ -68,21 +63,6 @@ public class AiDtos {
             @JsonProperty("overdue_payments")  int overduePayments
     ) {}
 
-    // ── 6. Lead Match ─────────────────────────────────────────────
-    public record LeadMatchRequest(
-            @JsonProperty("budget_min") String budgetMin,
-            @JsonProperty("budget_max") String budgetMax,
-            String type, String city,
-            Integer bedrooms,
-            @JsonProperty("lead_type") String leadType
-    ) {}
-
-    public record LeadMatchResponse(
-            @JsonProperty("raw_response") String rawResponse,
-            String summary
-    ) {}
-
-    // ── 7. Agent Performance ──────────────────────────────────
     public record AgentPerformanceRequest(
             @JsonProperty("agent_id")      Long   agentId,
             @JsonProperty("agent_name")    String agentName,
