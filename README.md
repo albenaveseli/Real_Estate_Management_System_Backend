@@ -1024,16 +1024,301 @@ class DashboardService$$SpringCGLIB$$0 extends DashboardService {
 
 ## Background Jobs — Spring Scheduler
 
-Four scheduled jobs run automatically in the background across all active tenant schemas:
+| Job | Trigger | What it does |
+|-----|---------|-------------|
+| `markOverduePayments` | every day at **00:00** | Finds all PENDING payments past due date → marks them OVERDUE → notifies admins |
+| `checkExpiringContracts` | every day at **08:00** | Finds ACTIVE leases expiring within 30 days → notifies admins |
+| `weeklyAdminReport` | every **Monday at 09:00** | Sends a combined summary: overdue count + expiring contracts + unassigned leads |
+| `logSystemStats` | every **6 hours** | Logs active lease count per tenant (monitoring only, no notifications) |
+| `healthCheck` | every **60 seconds** | Logs a heartbeat so ops can confirm the scheduler thread is alive |
 
-| Job | Schedule | Action |
-|---|---|---|
-| `markOverduePayments` | Daily 00:00 | Marks PENDING payments past due date as OVERDUE |
-| `checkExpiringContracts` | Daily 08:00 | Logs contracts expiring within 30 days |
-| `logSystemStats` | Every 6 hours | Logs active lease count per tenant |
-| `healthCheck` | Every 60 seconds | Logs active schema count |
+---
+# Scheduler Internals — How Spring Knows When to Run
 
-Each job iterates all provisioned tenant schemas, sets `TenantContext`, executes the operation, and clears the context in a `finally` block. `@EnableScheduling` is configured on `BackendApplication`.
+No HTTP request triggers these jobs. Spring wakes up a background thread at the
+exact configured time, completely on its own. Here is exactly how that works.
+
+---
+
+## 1. Startup — registering tasks
+
+When the application starts, `@EnableScheduling` tells Spring to scan every
+`@Service` and `@Component` for `@Scheduled` methods and register them into a
+`DelayQueue` ordered by next execution time.
+
+```mermaid
+flowchart LR
+    A[Application starts\n@EnableScheduling] --> B[Spring scans all\n@Scheduled methods]
+    B --> C[Builds ScheduledTask list\nmethod + trigger + next run time]
+    C --> D[(DelayQueue\nordered by next execution time)]
+
+    style A fill:#534AB7,color:#EEEDFE
+    style D fill:#BA7517,color:#FAEEDA
+```
+
+---
+
+## 2. The DelayQueue — priority queue by time
+
+All scheduled tasks live in a single `DelayQueue`. The item with the nearest
+execution time is always at the front. The timer thread blocks on `.take()` —
+it does not spin or consume CPU — it simply sleeps until the front item is ready.
+
+```mermaid
+block-beta
+  columns 1
+  Q["DelayQueue (ordered by next run time)"]
+  block:entries
+    E1["[00:00:00]  markOverduePayments  — cron 0 0 0 * * *"]
+    E2["[08:00:00]  checkExpiringContracts — cron 0 0 8 * * *"]
+    E3["[09:00 MON] weeklyAdminReport — cron 0 0 9 * * MON"]
+    E4["[now + 55s]  healthCheck — fixedDelay 60 000 ms"]
+    E5["[now + 6h]   logSystemStats — fixedDelay 21 600 000 ms"]
+  end
+```
+
+---
+
+## 3. cron vs fixedDelay — key difference
+
+```mermaid
+flowchart TD
+    subgraph cron["cron — fires at a wall-clock time"]
+        C1[job starts\n00:00:00] --> C2[job runs\n10 minutes]
+        C2 --> C3[CronTrigger calculates\nnext run = tomorrow 00:00:00]
+        C3 --> C4[re-queued regardless\nof how long job took]
+    end
+
+    subgraph fixed["fixedDelay — fires N ms after the previous run ends"]
+        F1[job starts] --> F2[job runs\n50 ms]
+        F2 --> F3[wait exactly\n60 000 ms]
+        F3 --> F4[fire again\ntotal gap = 60 050 ms]
+    end
+
+    style C1 fill:#185FA5,color:#E6F1FB
+    style F1 fill:#0F6E56,color:#E1F5EE
+```
+
+> `cron` is anchored to the clock — always midnight, regardless of runtime.
+> `fixedDelay` is anchored to the previous execution — the gap is always the same *after* the job finishes.
+
+---
+
+## 4. Runtime architecture — timer thread + thread pool
+
+```mermaid
+flowchart TD
+    subgraph executor["ScheduledExecutorService"]
+        TT["Timer Thread\n(sleeps inside DelayQueue.take)\nwakes only when next item is ready"]
+        TT -->|item ready| TP
+
+        subgraph pool["Thread Pool  poolSize = 3"]
+            T1["S-Thread-1\nBUSY — markOverduePayments"]
+            T2["S-Thread-2\nBUSY — healthCheck"]
+            T3["S-Thread-3\nFREE — waiting"]
+        end
+    end
+
+    DQ[(DelayQueue)] -->|unblocks .take| TT
+
+    style TT fill:#534AB7,color:#EEEDFE
+    style T1 fill:#A32D2D,color:#FCEBEB
+    style T2 fill:#A32D2D,color:#FCEBEB
+    style T3 fill:#0F6E56,color:#E1F5EE
+    style DQ fill:#BA7517,color:#FAEEDA
+```
+
+> The timer thread itself never runs job logic — it only picks tasks off the queue
+> and hands them to the thread pool. Job logic runs on pool threads (`S-Thread-N`).
+
+---
+
+## 5. TenantContext isolation between parallel threads
+
+Because `TenantContext` is a `ThreadLocal`, two threads running at the same time
+never share tenant state. Each thread has its own private slot.
+
+```mermaid
+flowchart LR
+    subgraph T1["S-Thread-1"]
+        A1[TenantContext\n= tenant_prestige_8]
+        A2[SET search_path\nTO tenant_prestige_8]
+        A3[SELECT * FROM properties\n→ prestige_8.properties]
+    end
+
+    subgraph T2["S-Thread-2"]
+        B1[TenantContext\n= tenant_rose_1]
+        B2[SET search_path\nTO tenant_rose_1]
+        B3[SELECT * FROM properties\n→ rose_1.properties]
+    end
+
+    A1 --> A2 --> A3
+    B1 --> B2 --> B3
+
+    style A1 fill:#534AB7,color:#EEEDFE
+    style B1 fill:#185FA5,color:#E6F1FB
+```
+
+> `ThreadLocal` guarantees `S-Thread-1.TenantContext ≠ S-Thread-2.TenantContext`.
+> Zero interference between tenants even when jobs run in parallel.
+
+---
+
+## 6. Full lifecycle — startup to re-queue
+
+```mermaid
+sequenceDiagram
+    participant Spring
+    participant DelayQueue
+    participant TimerThread
+    participant ThreadPool
+    participant Job
+
+    Spring->>DelayQueue: register markOverduePayments @ 00:00:00
+    Spring->>DelayQueue: register healthCheck @ now+60s
+
+    Note over TimerThread: sleeps inside DelayQueue.take()
+
+    DelayQueue-->>TimerThread: 00:00:00 reached — unblock .take()
+    TimerThread->>ThreadPool: submit markOverduePayments
+    ThreadPool->>Job: run on S-Thread-1
+
+    Job-->>ThreadPool: done
+    ThreadPool-->>DelayQueue: CronTrigger calculates next run
+    DelayQueue->>DelayQueue: re-queue markOverduePayments @ 00:00:00 tomorrow
+
+    Note over TimerThread: sleeps again until next item
+```
+
+---
+
+## 7. What happens with poolSize = 1 (default)
+
+```mermaid
+gantt
+    title Thread contention with poolSize = 1
+    dateFormat mm:ss
+    axisFormat %M:%S
+
+    section S-Thread-1
+    markOverduePayments (20s) : active, 00:00, 20s
+    healthCheck (waiting)     : crit,   00:00, 20s
+    healthCheck runs          : active, 00:20, 1s
+```
+
+> With `poolSize=1`, `healthCheck` must wait for `markOverduePayments` to finish.
+
+---
+
+## 8. After execution — the re-queue loop
+
+```mermaid
+flowchart LR
+    A[job finishes] --> B{trigger type?}
+    B -->|cron| C[CronTrigger.nextExecutionTime\ncalculates next wall-clock time]
+    B -->|fixedDelay| D[wait exactly N ms\nafter this finish time]
+    C --> E[(re-insert into DelayQueue)]
+    D --> E
+    E --> F[timer thread sleeps\nuntil item is ready]
+    F --> G[cycle repeats forever]
+
+    style E fill:#BA7517,color:#FAEEDA
+```
+
+---
+
+## Configuration
+
+```properties
+# application.yml
+
+# Allow jobs to run in parallel (default = 1)
+spring.task.scheduling.pool.size=3
+```
+
+```java
+// BackendApplication.java — required to activate @Scheduled
+@EnableScheduling
+@SpringBootApplication
+public class BackendApplication { }
+```
+---
+
+## Why TenantContext is set manually
+
+Normal HTTP requests have a JWT token. `JwtAuthFilter` decodes it and calls
+`TenantContext.set(userId, tenantId, schemaName, role)` automatically.
+
+The scheduler has **no JWT and no HTTP request**. If `TenantContext` were left empty,
+`TenantIdentifierResolver` would return `null`, Hibernate would route every query to the
+`public` schema, and no tenant data would be found.
+
+The fix is to set it manually before each tenant and clear it in `finally`:
+
+```java
+for (var schema : activeSchemas()) {
+    try {
+        // Manually route Hibernate to this tenant's schema
+        TenantContext.set(null, null, schema.getSchemaName(), "SYSTEM");
+        //             ↑     ↑      ↑                         ↑
+        //          userId tenantId  schema name             role
+        //          null   null   "tenant_prestige_8"      "SYSTEM"
+        //
+        // Hibernate now runs:
+        //   SET LOCAL search_path TO "tenant_prestige_8", public
+        // All queries go to the correct tenant tables.
+
+        // ... job logic ...
+
+    } catch (Exception e) {
+        log.error("[Scheduler] Error for schema={}: {}", schema.getSchemaName(), e.getMessage());
+        // Do NOT rethrow — the loop must continue for the remaining tenants.
+
+    } finally {
+        TenantContext.clear();
+        // Always runs, even on exception.
+        // The thread goes back to the pool completely clean.
+    }
+}
+```
+
+---
+
+## Why evictAll() instead of evict()
+
+```java
+// evict() uses the current tenant's ID as the cache key:
+@CacheEvict(key = "T(TenantContext).getTenantId()")
+// → TenantContext.getTenantId() returns null in the scheduler (no tenantId set)
+// → cache key becomes "dashboard-stats::null" — wrong or broken
+
+// evictAll() ignores the key entirely:
+@CacheEvict(allEntries = true)
+// → deletes every entry in "dashboard-stats"
+// → safe to call with no TenantContext
+dashboardService.evictAll(); // used by scheduler
+dashboardService.evict();    // used by regular service calls (has tenantId)
+```
+---
+
+## Cron syntax reference
+
+```
+"0 0 0 * * *"
+ │ │ │ │ │ └── day of week  (* = every day)
+ │ │ │ │ └──── month        (* = every month)
+ │ │ │ └────── day of month (* = every day)
+ │ │ └──────── hour         (0 = midnight)
+ │ └────────── minute       (0)
+ └──────────── second       (0)
+
+Examples used in this project:
+  "0 0 0 * * *"     → every day at 00:00:00
+  "0 0 8 * * *"     → every day at 08:00:00
+  "0 0 9 * * MON"   → every Monday at 09:00:00
+  fixedDelay=60000  → 60 seconds after the previous execution ends
+  fixedDelay=21600000 → 6 hours after the previous execution ends
+```
 
 ---
 
