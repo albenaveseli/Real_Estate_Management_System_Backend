@@ -152,7 +152,7 @@ public class PropertyDtos {
             @JsonProperty("agent_id")      Long agentId,
             @JsonProperty("created_at")    LocalDateTime createdAt,
             @JsonProperty("updated_at")    LocalDateTime updatedAt
-    )implements Serializable {}
+    ) {}
 
 
 
@@ -174,7 +174,7 @@ public class PropertyDtos {
             @JsonProperty("primary_image") String primaryImage,
             @JsonProperty("agent_id")      Long agentId,
             @JsonProperty("created_at")    LocalDateTime createdAt
-    )implements Serializable {}
+    ){}
 
 
 
