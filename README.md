@@ -853,17 +853,172 @@ This eliminates repeated `ResponseEntity.ok(...)`, `PageRequest.of(...)`, and `H
 
 ---
 
-## Caching — Redis
-Dashboard statistics 
-are cached in Redis with a 10-minute TTL:
+# Caching Architecture — DashboardService
 
-User → GET /api/dashboard/stats → miss → aggregate DB queries → cache per tenant
-User → GET /api/dashboard/stats → hit  → return from Redis (cache key = tenantId)
+## How @Cacheable works (Cache Hit and Cache Miss)
 
-@Cacheable is applied to read-heavy endpoints. @CacheEvict invalidates 
-the cache automatically on create, update, and delete operations.
-Dashboard stats cache is evicted automatically when underlying data changes.
-@EnableCaching is configured on BackendApplication.
+```mermaid
+flowchart TD
+    A[AdminController\nthërret getStats] --> B
+
+    B{CGLIB Proxy\nndërkap thirrjen\nkey = tenantId = 8}
+
+    B -->|kontrollo| C[(Redis\nGET dashboard-stats 8)]
+
+    C -->|HIT ~1ms\nzero DB queries| G[Response\nte Controller]
+
+    C -->|MISS\nnuk ekziston| D[DashboardService\nmetoda reale]
+
+    D --> E[(PostgreSQL\n7 queries\ncountByStatus x4\ncountLeads\ntotalRevenue)]
+
+    E -->|rezultati| D
+
+    D -->|Map rezultati| F[(Redis\nSET dashboard-stats 8\nbytes JSON)]
+
+    F --> G
+
+    style B fill:#534AB7,color:#EEEDFE
+    style C fill:#BA7517,color:#FAEEDA
+    style D fill:#185FA5,color:#E6F1FB
+    style E fill:#5F5E5A,color:#F1EFE8
+    style F fill:#BA7517,color:#FAEEDA
+    style G fill:#0F6E56,color:#E1F5EE
+    style A fill:#0F6E56,color:#E1F5EE
+```
+
+> **Cache Miss** — First time: Redis doesn’t have it → 7 queries → stored in Redis → ~50ms  
+> **Cache Hit** — Subsequent times: Redis has it → returned directly → zero DB queries → ~1ms
+
+---
+
+## How @CacheEvict works (evict and evictAll)
+
+```mermaid
+flowchart LR
+    subgraph services["Services që ndryshojnë të dhëna"]
+        S1[PropertyService\nupdateStatus / delete]
+        S2[PaymentService\nmarkAsPaid / create]
+        S3[ContractService\ncreate / updateStatus]
+    end
+
+    S1 --> P
+    S2 --> P
+    S3 --> P
+
+    P{CGLIB Proxy\n@CacheEvict\nkey = tenantId = 8}
+
+    P -->|DEL dashboard-stats 8| R1[(Redis\nvetëm tenant 8\nfshihet)]
+
+    subgraph scheduler["Scheduler — pa TenantContext"]
+        SC[SchedulerService\nmarkOverduePayments\nevictAll]
+    end
+
+    SC --> P2{CGLIB Proxy\nallEntries = true}
+
+    P2 -->|DEL të gjitha| R2[(Redis\ntë gjitha keys\nfshihen)]
+
+    style P fill:#534AB7,color:#EEEDFE
+    style P2 fill:#534AB7,color:#EEEDFE
+    style R1 fill:#A32D2D,color:#FCEBEB
+    style R2 fill:#A32D2D,color:#FCEBEB
+    style S1 fill:#185FA5,color:#E6F1FB
+    style S2 fill:#185FA5,color:#E6F1FB
+    style S3 fill:#185FA5,color:#E6F1FB
+    style SC fill:#BA7517,color:#FAEEDA
+```
+
+> **evict()** — Removes one specific cached value based on a key (from TenantContext)  
+> **evictAll()** — Removes all entries inside the cache namespace. (used by Scheduler)
+
+---
+
+## How CGLIB Proxy works
+
+```mermaid
+flowchart TD
+    subgraph noproxy["Pa proxy — @Cacheable injorohet"]
+        A1[Controller] -->|thirrje direkte| B1[DashboardService]
+        B1 --> C1[(DB — gjithmonë)]
+    end
+
+    subgraph withproxy["Me proxy — Spring e ndërkap thirrjen"]
+        A2[Controller] -->|mendon se flet me Service| PX
+
+        PX["CGLIB Proxy\nextends DashboardService\n\n1. kontrollo Redis\n2. nëse HIT → kthe direkt\n3. nëse MISS → thirr super"]
+
+        PX -->|HIT| RD[(Redis\nkthe direkt)]
+        PX -->|MISS\nthirr super.getStats| B2[DashboardService\norigjinali\n7 queries]
+        B2 --> DB2[(PostgreSQL)]
+        DB2 --> B2
+        B2 -->|rezultati| PX
+        PX -->|ruaj + kthe| A2
+    end
+
+    style PX fill:#534AB7,color:#EEEDFE
+    style RD fill:#BA7517,color:#FAEEDA
+    style B2 fill:#185FA5,color:#E6F1FB
+    style DB2 fill:#5F5E5A,color:#F1EFE8
+    style B1 fill:#185FA5,color:#E6F1FB
+    style C1 fill:#5F5E5A,color:#F1EFE8
+    style A1 fill:#0F6E56,color:#E1F5EE
+    style A2 fill:#0F6E56,color:#E1F5EE
+```
+
+> **The controller thinks it is talking to the DashboardService — but in reality, it is talking to the proxy.** 
+> Spring generates automatically `DashboardService$$SpringCGLIB$$0 extends DashboardService`
+
+---
+
+## What happens “behind the scenes” — CGLIB Proxy
+
+```java
+// Ti shkruan:
+@Cacheable(...)
+public Map<String, Object> getStats() { ... }
+
+// Spring gjeneron automatikisht (nuk e sheh ti):
+class DashboardService$$SpringCGLIB$$0 extends DashboardService {
+
+    @Override
+    public Map<String, Object> getStats() {
+
+        // HAPI 1: Gjenero key
+        Long tenantId = TenantContext.getTenantId(); // → 8
+        String cacheKey = "dashboard-stats::" + tenantId;
+
+        // HAPI 2: Kontrollo Redis
+        Object cached = redis.get(cacheKey);
+
+        if (cached != null) {
+            // CACHE HIT — metoda origjinale NUK ekzekutohet
+            return deserialize(cached); // ~1ms
+        }
+
+        // CACHE MISS — ekzekuto metodën origjinale
+        Map<String, Object> result = super.getStats(); // ~50ms, 7 queries
+
+        // HAPI 3: Ruaj në Redis
+        redis.set(cacheKey, serialize(result));
+
+        return result;
+    }
+}
+
+// Spring inject-on PROXY-n (jo origjinalin):
+// @Autowired DashboardService service;
+// → në realitet është DashboardService$$SpringCGLIB$$0
+```
+
+---
+
+## Performance
+
+| Scenario                        | DB Queries | Time      | When it happens                |
+| ------------------------------- | ---------- | --------- | ------------------------------ |
+| Cache MISS                      | 7 queries  | ~50ms     | First time, after evict()      |
+| Cache HIT                       | 0 queries  | ~1ms      | Every subsequent call          |
+| 10 admins simultaneously (HIT)  | 0 queries  | ~1ms each | All users get data from Redis  |
+| 10 admins simultaneously (MISS) | 7 queries  | ~50ms     | Only one executes, others wait |
 
 ---
 
