@@ -1164,35 +1164,7 @@ flowchart LR
 
 ---
 
-## 6. Full lifecycle — startup to re-queue
-
-```mermaid
-sequenceDiagram
-    participant Spring
-    participant DelayQueue
-    participant TimerThread
-    participant ThreadPool
-    participant Job
-
-    Spring->>DelayQueue: register markOverduePayments @ 00:00:00
-    Spring->>DelayQueue: register healthCheck @ now+60s
-
-    Note over TimerThread: sleeps inside DelayQueue.take()
-
-    DelayQueue-->>TimerThread: 00:00:00 reached — unblock .take()
-    TimerThread->>ThreadPool: submit markOverduePayments
-    ThreadPool->>Job: run on S-Thread-1
-
-    Job-->>ThreadPool: done
-    ThreadPool-->>DelayQueue: CronTrigger calculates next run
-    DelayQueue->>DelayQueue: re-queue markOverduePayments @ 00:00:00 tomorrow
-
-    Note over TimerThread: sleeps again until next item
-```
-
----
-
-## 7. What happens with poolSize = 1 (default)
+## 6. What happens with poolSize = 1 (default)
 
 ```mermaid
 gantt
@@ -1210,7 +1182,7 @@ gantt
 
 ---
 
-## 8. After execution — the re-queue loop
+## 7. After execution — the re-queue loop
 
 ```mermaid
 flowchart LR
