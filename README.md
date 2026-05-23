@@ -528,33 +528,14 @@ erDiagram
     permissions ||--o{ role_permissions : "granted via"
 ```
 
-### How authorization flows at runtime
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant J as JwtAuthFilter
-    participant P as PermissionAuthorizationFilter
-    participant DB as public schema (PostgreSQL)
-    participant API as Controller
-
-    C->>J: HTTP Request + Bearer JWT
-    J->>J: validate token (JJWT)
-    J->>J: extract userId, schemaName, role
-    J->>J: set TenantContext (ThreadLocal)
-    J->>P: pass to next filter
-
-    P->>DB: SELECT p.http_method, p.api_path\nFROM permissions p\nJOIN role_permissions rp ON rp.permission_id = p.id\nJOIN user_roles ur ON ur.role_id = rp.role_id\nWHERE ur.user_id = ?
-
-    DB-->>P: list of allowed METHOD + PATH pairs
-
-    alt permission found (AntPathMatcher)
-        P->>API: request passes through
-        API-->>C: 200 OK + data
-    else no matching permission
-        P-->>C: 403 Forbidden
-    end
+```markdown
+> **RBAC note:** `user_roles` and `role_permissions` are intentionally modelled
+> as many-to-many junction tables for future extensibility. In the current
+> implementation every user holds exactly one role (ADMIN, AGENT, or CLIENT).
+> The schema requires no changes to support multi-role users — only application
+> logic and frontend role checks would need updating.
 ```
+
 
 ---
 
