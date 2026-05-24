@@ -1300,7 +1300,65 @@ Scenario 2 (company-owned property):
 Same structure as rental but applied to the total sale price instead of monthly rent.
 
 ---
+## Unit Testing
 
+Unit tests verify each service method in complete isolation — no database, no Spring context, no real dependencies.
+
+## Frameworks & Libraries
+
+| Tool | Role |
+|------|------|
+| **JUnit 5** | Test runner — `@Test`, `@Nested`, `@BeforeEach`, `@DisplayName` |
+| **Mockito** | Mocking dependencies — `@Mock`, `@InjectMocks`, `when().thenReturn()`, `mockStatic()` |
+| **AssertJ** | Fluent assertions — `assertThat()`, `assertThatThrownBy()` |
+
+## Pattern — AAA (Arrange · Act · Assert)
+
+Every test follows the same three-step structure:
+
+```java
+@Test
+@DisplayName("creates new profile when none exists")
+void success_creates() {
+
+    // ARRANGE — set up mocks and input
+    asAgent(AGENT_ID);
+    when(agentProfileRepo.findByUserId(AGENT_ID)).thenReturn(Optional.empty());
+    when(agentProfileRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+    // ACT — call the method under test
+    AgentProfileResponse resp = service.upsertMyProfile(validRequest());
+
+    // ASSERT — verify the result
+    assertThat(resp.userId()).isEqualTo(AGENT_ID);
+    assertThat(resp.phone()).isEqualTo("+38344123456");
+}
+```
+
+## What is tested
+
+Each service is tested for three categories:
+
+- **Happy path** — method succeeds and returns the expected result
+- **Role-based access** — ADMIN / AGENT / CLIENT receive correct response or `ForbiddenException`
+- **Validation** — invalid input (phone format, negative values, URL format, field length) throws `BadRequestException`
+
+## TenantContext — static mocking
+
+`TenantContext` uses `ThreadLocal` static methods. Standard `@Mock` does not work for static calls, so each test class uses `Mockito.mockStatic()` to simulate the current user and role:
+
+```java
+@BeforeEach void openTenant()  { tenantCtx = mockStatic(TenantContext.class); }
+@AfterEach  void closeTenant() { tenantCtx.close(); }
+
+private void asAgent(Long id) {
+    tenantCtx.when(TenantContext::getUserId).thenReturn(id);
+    tenantCtx.when(() -> TenantContext.hasRole("ADMIN", "AGENT")).thenReturn(true);
+    tenantCtx.when(() -> TenantContext.hasRole("ADMIN")).thenReturn(false);
+}
+```
+
+---
 ## API Overview
 
 The API exposes over 60 REST endpoints. All endpoints require a Bearer JWT token except `/api/auth/**`.
